@@ -157,6 +157,7 @@ export const RecordPayment = ({ orderId, outstandingBalance, onPaymentRecorded }
                     required
                   >
                     <option value="">Select a payment method</option>
+                    <option value="mobile_money">Mobile Money</option>
                     <option value="cash">Cash</option>
                     <option value="bank_transfer">Bank Transfer</option>
                     <option value="credit_card">Credit Card</option>

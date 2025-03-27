@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Plus } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
@@ -14,6 +14,8 @@ export default function CreateProductForm({ onClose, onSuccess }: CreateProductF
   const { organization } = useAuthStore();
   const { addToast } = useUI();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showCustomCategory, setShowCustomCategory] = useState(false);
+  const [customCategory, setCustomCategory] = useState('');
   const [formData, setFormData] = useState({
     name: '',
     sku: '',
@@ -96,6 +98,24 @@ export default function CreateProductForm({ onClose, onSuccess }: CreateProductF
     }
   };
 
+  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    if (value === 'custom') {
+      setShowCustomCategory(true);
+      setFormData(prev => ({ ...prev, category: '' }));
+    } else {
+      setShowCustomCategory(false);
+      setCustomCategory('');
+      setFormData(prev => ({ ...prev, category: value as ProductCategory }));
+    }
+  };
+
+  const handleCustomCategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setCustomCategory(value);
+    setFormData(prev => ({ ...prev, category: value }));
+  };
+
   return (
     <form onSubmit={handleSubmit} className="p-6 space-y-6">
       <div className="flex justify-between items-center">
@@ -140,17 +160,44 @@ export default function CreateProductForm({ onClose, onSuccess }: CreateProductF
           <label className="block text-sm font-medium text-gray-700">
             Category *
           </label>
-          <select
-            required
-            value={formData.category}
-            onChange={(e) => setFormData(prev => ({ ...prev, category: e.target.value as ProductCategory }))}
-            className="mt-1 block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
-          >
-            <option value="raw_material">Raw Material</option>
-            <option value="finished_good">Finished Good</option>
-            <option value="packaging">Packaging</option>
-            <option value="other">Other</option>
-          </select>
+          <div className="mt-1 space-y-2">
+            <select
+              required
+              value={showCustomCategory ? 'custom' : formData.category}
+              onChange={handleCategoryChange}
+              className="block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+            >
+              <option value="raw_material">Raw Material</option>
+              <option value="finished_good">Finished Good</option>
+              <option value="packaging">Packaging</option>
+              <option value="other">Other</option>
+              <option value="custom">+ Add Custom Category</option>
+            </select>
+            
+            {showCustomCategory && (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  required
+                  value={customCategory}
+                  onChange={handleCustomCategoryChange}
+                  placeholder="Enter custom category name"
+                  className="block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowCustomCategory(false);
+                    setCustomCategory('');
+                    setFormData(prev => ({ ...prev, category: 'finished_good' }));
+                  }}
+                  className="inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div>

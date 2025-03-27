@@ -20,6 +20,10 @@ export default function SalesOrdersList() {
   const [showAddOrder, setShowAddOrder] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [amount, setAmount] = useState<string>('');
+  const [paymentMethod, setPaymentMethod] = useState<string>('');
+  const [paymentReference, setPaymentReference] = useState<string>('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const { organization } = useAuthStore();
   const { confirm, addToast } = useUI();
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : '';
@@ -109,6 +113,87 @@ export default function SalesOrdersList() {
     }
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!amount || !paymentMethod) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Please fill in all required fields'
+      });
+      return;
+    }
+
+    const numericAmount = parseFloat(amount);
+    if (isNaN(numericAmount) || numericAmount <= 0) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Please enter a valid payment amount'
+      });
+      return;
+    }
+
+    if (!selectedOrder || numericAmount > selectedOrder.outstanding_balance) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Payment amount cannot exceed outstanding balance'
+      });
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      
+      if (userError) throw userError;
+      if (!user) throw new Error('User not authenticated');
+
+      console.log({
+        p_organization_id: organization?.id,
+        p_order_id: selectedOrder.id,
+        p_amount: numericAmount,
+        p_payment_method: paymentMethod,
+        p_payment_reference: paymentReference || null,
+        p_recorded_by: user.id
+      })
+      const { error } = await supabase.rpc('record_payment', {
+        p_organization_id: organization?.id,
+        p_order_id: selectedOrder.id,
+        p_amount: numericAmount,
+        p_payment_method: paymentMethod,
+        p_payment_reference: paymentReference || null,
+        p_recorded_by: user.id
+      });
+
+      if (error) throw error;
+
+      addToast({
+        type: 'success',
+        title: 'Success',
+        message: 'Payment recorded successfully'
+      });
+      
+      setAmount('');
+      setPaymentMethod('');
+      setPaymentReference('');
+      setShowPaymentForm(false);
+      setSelectedOrder(null);
+      loadOrders();
+    } catch (error: any) {
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: error.message || 'Failed to record payment'
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   const filteredOrders = orders.filter(order =>
     (statusFilter === 'all' || order.payment_status === statusFilter) &&
     (order.order_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -163,40 +248,118 @@ export default function SalesOrdersList() {
                 setSelectedOrder(null);
               }} 
             />
-            <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl">
-              <div className="bg-white px-4 pb-4 pt-5 sm:p-6 sm:pb-4">
-                <div className="sm:flex sm:items-start">
-                  <div className="mt-3 text-center sm:mt-0 sm:text-left w-full">
-                    <div className="flex justify-between items-center mb-4">
-                      <h3 className="text-lg font-semibold leading-6 text-gray-900">
-                        Record Payment
-                      </h3>
+            <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+              <div className="bg-white">
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
+                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
+                    <CreditCard className="h-5 w-5 mr-2 text-gray-500" />
+                    Record Payment
+                  </h3>
+                  <button
+                    onClick={() => {
+                      setShowPaymentForm(false);
+                      setSelectedOrder(null);
+                    }}
+                    className="text-gray-400 hover:text-gray-500"
+                  >
+                    <span className="sr-only">Close</span>
+                    <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="px-6 py-5">
+                  <div className="mb-6">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-500">Order Number</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedOrder.order_number}</span>
+                    </div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium text-gray-500">Client</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedOrder.client?.name}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium text-gray-500">Outstanding Balance</span>
+                      <span className="text-lg font-bold text-blue-600">
+                        {currencySymbol} {selectedOrder.outstanding_balance.toFixed(2)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Amount*
+                      </label>
+                      <div className="mt-1 relative rounded-md shadow-sm">
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <span className="text-gray-500 sm:text-sm">$</span>
+                        </div>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0.01"
+                          max={selectedOrder.outstanding_balance}
+                          value={amount}
+                          onChange={(e) => setAmount(e.target.value)}
+                          className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
+                          placeholder="0.00"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Payment Method*
+                      </label>
+                      <select
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                        required
+                      >
+                        <option value="">Select a payment method</option>
+                        <option value="mobile_money">Mobile Money</option>
+                        <option value="cash">Cash</option>
+                        <option value="bank_transfer">Bank Transfer</option>
+                        <option value="credit_card">Credit Card</option>
+                        <option value="check">Check</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700">
+                        Payment Reference
+                      </label>
+                      <input
+                        type="text"
+                        value={paymentReference}
+                        onChange={(e) => setPaymentReference(e.target.value)}
+                        className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                        placeholder="e.g., Check number, Transaction ID"
+                      />
+                    </div>
+
+                    <div className="mt-6 flex justify-end space-x-3">
                       <button
+                        type="button"
                         onClick={() => {
                           setShowPaymentForm(false);
                           setSelectedOrder(null);
                         }}
-                        className="text-gray-400 hover:text-gray-500"
+                        className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                       >
-                        <span className="sr-only">Close</span>
-                        <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleSubmit}
+                        disabled={isSubmitting}
+                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300"
+                      >
+                        {isSubmitting ? 'Recording Payment...' : 'Record Payment'}
                       </button>
                     </div>
-                    <RecordPayment
-                      orderId={selectedOrder.id}
-                      outstandingBalance={selectedOrder.outstanding_balance}
-                      onPaymentRecorded={() => {
-                        setShowPaymentForm(false);
-                        setSelectedOrder(null);
-                        loadOrders();
-                      }}
-                      onCancel={() => {
-                        setShowPaymentForm(false);
-                        setSelectedOrder(null);
-                      }}
-                    />
                   </div>
                 </div>
               </div>

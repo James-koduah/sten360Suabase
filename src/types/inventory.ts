@@ -1,4 +1,4 @@
-export type ProductCategory = 'raw_material' | 'finished_good' | 'packaging' | 'other';
+export type ProductCategory = 'raw_material' | 'finished_good' | 'packaging' | 'other' | string;
 
 export type OrderStatus = 'draft' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled';
 

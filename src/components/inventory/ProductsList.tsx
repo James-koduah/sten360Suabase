@@ -1,10 +1,10 @@
-import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, Package } from 'lucide-react';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Search, Edit2, Trash2, Package, ChevronDown } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
 import { Product, ProductCategory } from '../../types/inventory';
-import { PRODUCT_CATEGORIES, PRODUCT_CATEGORY_COLORS } from '../../utils/inventory-constants';
+import { STANDARD_CATEGORIES, getCategoryLabel, getCategoryColor } from '../../utils/inventory-constants';
 import { CURRENCIES } from '../../utils/constants';
 import CreateProductForm from './CreateProductForm';
 
@@ -14,9 +14,26 @@ export default function ProductsList() {
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'all'>('all');
   const [showAddProduct, setShowAddProduct] = useState(false);
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
+  const [categorySearch, setCategorySearch] = useState('');
   const { organization } = useAuthStore();
   const { confirm, addToast } = useUI();
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : '';
+
+  // Extract unique categories from products
+  const allCategories = useMemo(() => {
+    const categories = new Set<ProductCategory>();
+    products.forEach(product => categories.add(product.category));
+    return Array.from(categories).sort();
+  }, [products]);
+
+  // Filter categories based on search
+  const filteredCategories = useMemo(() => {
+    if (!categorySearch) return allCategories;
+    return allCategories.filter(category => 
+      getCategoryLabel(category).toLowerCase().includes(categorySearch.toLowerCase())
+    );
+  }, [allCategories, categorySearch]);
 
   useEffect(() => {
     if (!organization) return;
@@ -124,16 +141,57 @@ export default function ProductsList() {
           <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
         </div>
 
-        <select
-          value={categoryFilter}
-          onChange={(e) => setCategoryFilter(e.target.value as ProductCategory | 'all')}
-          className="block w-full sm:w-48 rounded-lg border border-gray-300 py-2 pl-3 pr-10 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        >
-          <option value="all">All Categories</option>
-          {Object.entries(PRODUCT_CATEGORIES).map(([key, label]) => (
-            <option key={key} value={key}>{label}</option>
-          ))}
-        </select>
+        <div className="relative">
+          <button
+            type="button"
+            onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+            className="inline-flex items-center justify-between w-full sm:w-48 rounded-lg border border-gray-300 py-2 pl-3 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          >
+            <span className="truncate">
+              {categoryFilter === 'all' ? 'All Categories' : getCategoryLabel(categoryFilter)}
+            </span>
+            <ChevronDown className="h-4 w-4 text-gray-400" />
+          </button>
+
+          {showCategoryDropdown && (
+            <div className="absolute z-10 mt-1 w-full sm:w-48 rounded-md bg-white shadow-lg">
+              <div className="p-2">
+                <input
+                  type="text"
+                  value={categorySearch}
+                  onChange={(e) => setCategorySearch(e.target.value)}
+                  placeholder="Search categories..."
+                  className="block w-full rounded-md border border-gray-300 py-1.5 px-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+              <div className="max-h-60 overflow-auto">
+                <div
+                  className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                  onClick={() => {
+                    setCategoryFilter('all');
+                    setShowCategoryDropdown(false);
+                    setCategorySearch('');
+                  }}
+                >
+                  All Categories
+                </div>
+                {filteredCategories.map(category => (
+                  <div
+                    key={category}
+                    className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
+                    onClick={() => {
+                      setCategoryFilter(category);
+                      setShowCategoryDropdown(false);
+                      setCategorySearch('');
+                    }}
+                  >
+                    {getCategoryLabel(category)}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
@@ -183,11 +241,11 @@ export default function ProductsList() {
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      PRODUCT_CATEGORY_COLORS[product.category].bg
+                      getCategoryColor(product.category).bg
                     } ${
-                      PRODUCT_CATEGORY_COLORS[product.category].text
+                      getCategoryColor(product.category).text
                     }`}>
-                      {PRODUCT_CATEGORIES[product.category]}
+                      {getCategoryLabel(product.category)}
                     </span>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">

@@ -230,39 +230,56 @@ DECLARE
     v_service JSONB;
     v_custom_field JSONB;
     v_order_number TEXT;
+    v_attempts INTEGER := 0;
+    v_max_attempts INTEGER := 10;
 BEGIN
-    -- Generate order number (format: ORD-YYYYMMDD-XXXX)
-    SELECT 'ORD-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || 
-           LPAD(CAST(COALESCE(
-               (SELECT MAX(CAST(SPLIT_PART(order_number, '-', 3) AS INTEGER))
-                FROM orders
-                WHERE organization_id = p_organization_id
-                AND order_number LIKE 'ORD-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-%'),
-               0) + 1 AS TEXT), 4, '0')
-    INTO v_order_number;
+    -- Generate order number with retry logic
+    LOOP
+        -- Format: ORD-YYYYMMDD-XXXX-RRRR
+        -- where XXXX is a sequential number and RRRR is a random 4-digit number
+        SELECT 'ORD-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || 
+               LPAD(CAST(COALESCE(
+                   (SELECT MAX(CAST(SPLIT_PART(order_number, '-', 3) AS INTEGER))
+                    FROM orders
+                    WHERE organization_id = p_organization_id
+                    AND order_number LIKE 'ORD-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-%'),
+                   0) + 1 AS TEXT), 4, '0') || '-' ||
+               LPAD(CAST(FLOOR(RANDOM() * 10000) AS TEXT), 4, '0')
+        INTO v_order_number;
 
-    -- Insert the order
-    INSERT INTO orders (
-        organization_id,
-        order_number,
-        client_id,
-        description,
-        due_date,
-        status,
-        total_amount,
-        outstanding_balance,
-        payment_status
-    ) VALUES (
-        p_organization_id,
-        v_order_number,
-        p_client_id,
-        p_description,
-        p_due_date,
-        'draft',
-        p_total_amount,
-        p_total_amount,
-        'unpaid'
-    ) RETURNING * INTO v_order;
+        -- Try to insert the order
+        BEGIN
+            INSERT INTO orders (
+                organization_id,
+                order_number,
+                client_id,
+                description,
+                due_date,
+                status,
+                total_amount,
+                outstanding_balance,
+                payment_status
+            ) VALUES (
+                p_organization_id,
+                v_order_number,
+                p_client_id,
+                p_description,
+                p_due_date,
+                'draft',
+                p_total_amount,
+                p_total_amount,
+                'unpaid'
+            ) RETURNING * INTO v_order;
+            EXIT; -- Success, exit the loop
+        EXCEPTION WHEN unique_violation THEN
+            v_attempts := v_attempts + 1;
+            IF v_attempts >= v_max_attempts THEN
+                RAISE EXCEPTION 'Failed to generate unique order number after % attempts', v_max_attempts;
+            END IF;
+            -- Wait a bit before retrying
+            PERFORM pg_sleep(0.1);
+        END;
+    END LOOP;
 
     -- Insert order workers
     FOR v_worker IN SELECT * FROM jsonb_array_elements(p_workers)
@@ -296,19 +313,23 @@ BEGIN
         );
     END LOOP;
 
-    -- Insert order custom fields
-    FOR v_custom_field IN SELECT * FROM jsonb_array_elements(p_custom_fields)
-    LOOP
-        INSERT INTO order_custom_fields (
-            order_id,
-            custom_field_id,
-            value
-        ) VALUES (
-            v_order.id,
-            (v_custom_field->>'id')::UUID,
-            v_custom_field->>'value'
-        );
-    END LOOP;
+    -- Insert order custom fields only if they exist and have valid IDs
+    IF p_custom_fields IS NOT NULL AND jsonb_array_length(p_custom_fields) > 0 THEN
+        FOR v_custom_field IN SELECT * FROM jsonb_array_elements(p_custom_fields)
+        LOOP
+            IF v_custom_field->>'id' IS NOT NULL THEN
+                INSERT INTO order_custom_fields (
+                    order_id,
+                    custom_field_id,
+                    value
+                ) VALUES (
+                    v_order.id,
+                    (v_custom_field->>'id')::UUID,
+                    v_custom_field->>'value'
+                );
+            END IF;
+        END LOOP;
+    END IF;
 
     RETURN v_order;
 END;
@@ -464,39 +485,56 @@ DECLARE
     v_service JSONB;
     v_custom_field JSONB;
     v_order_number TEXT;
+    v_attempts INTEGER := 0;
+    v_max_attempts INTEGER := 10;
 BEGIN
-    -- Generate order number (format: ORD-YYYYMMDD-XXXX)
-    SELECT 'ORD-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || 
-           LPAD(CAST(COALESCE(
-               (SELECT MAX(CAST(SPLIT_PART(order_number, '-', 3) AS INTEGER))
-                FROM orders
-                WHERE organization_id = p_organization_id
-                AND order_number LIKE 'ORD-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-%'),
-               0) + 1 AS TEXT), 4, '0')
-    INTO v_order_number;
+    -- Generate order number with retry logic
+    LOOP
+        -- Format: ORD-YYYYMMDD-XXXX-RRRR
+        -- where XXXX is a sequential number and RRRR is a random 4-digit number
+        SELECT 'ORD-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-' || 
+               LPAD(CAST(COALESCE(
+                   (SELECT MAX(CAST(SPLIT_PART(order_number, '-', 3) AS INTEGER))
+                    FROM orders
+                    WHERE organization_id = p_organization_id
+                    AND order_number LIKE 'ORD-' || TO_CHAR(CURRENT_DATE, 'YYYYMMDD') || '-%'),
+                   0) + 1 AS TEXT), 4, '0') || '-' ||
+               LPAD(CAST(FLOOR(RANDOM() * 10000) AS TEXT), 4, '0')
+        INTO v_order_number;
 
-    -- Insert the order
-    INSERT INTO orders (
-        organization_id,
-        order_number,
-        client_id,
-        description,
-        due_date,
-        status,
-        total_amount,
-        outstanding_balance,
-        payment_status
-    ) VALUES (
-        p_organization_id,
-        v_order_number,
-        p_client_id,
-        p_description,
-        p_due_date,
-        'draft',
-        p_total_amount,
-        p_total_amount,
-        'unpaid'
-    ) RETURNING * INTO v_order;
+        -- Try to insert the order
+        BEGIN
+            INSERT INTO orders (
+                organization_id,
+                order_number,
+                client_id,
+                description,
+                due_date,
+                status,
+                total_amount,
+                outstanding_balance,
+                payment_status
+            ) VALUES (
+                p_organization_id,
+                v_order_number,
+                p_client_id,
+                p_description,
+                p_due_date,
+                'draft',
+                p_total_amount,
+                p_total_amount,
+                'unpaid'
+            ) RETURNING * INTO v_order;
+            EXIT; -- Success, exit the loop
+        EXCEPTION WHEN unique_violation THEN
+            v_attempts := v_attempts + 1;
+            IF v_attempts >= v_max_attempts THEN
+                RAISE EXCEPTION 'Failed to generate unique order number after % attempts', v_max_attempts;
+            END IF;
+            -- Wait a bit before retrying
+            PERFORM pg_sleep(0.1);
+        END;
+    END LOOP;
 
     -- Insert order workers
     FOR v_worker IN SELECT * FROM jsonb_array_elements(p_workers)

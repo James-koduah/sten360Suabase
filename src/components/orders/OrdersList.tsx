@@ -112,40 +112,6 @@ export default function OrdersList() {
     }
   };
 
-  const handleDeleteOrder = async (orderId: string) => {
-    const confirmed = await confirm({
-      title: 'Delete Order',
-      message: 'Are you sure you want to delete this order? This action cannot be undone.',
-      type: 'danger',
-      confirmText: 'Delete',
-      cancelText: 'Cancel'
-    });
-
-    if (!confirmed) return;
-
-    try {
-      const { error } = await supabase
-        .from('orders')
-        .delete()
-        .eq('id', orderId);
-
-      if (error) throw error;
-
-      setOrders(prev => prev.filter(o => o.id !== orderId));
-      addToast({
-        type: 'success',
-        title: 'Order Deleted',
-        message: 'The order has been deleted successfully.'
-      });
-    } catch (error) {
-      console.error('Error deleting order:', error);
-      addToast({
-        type: 'error',
-        title: 'Error',
-        message: 'Failed to delete order. Please try again.'
-      });
-    }
-  };
 
   const handleWeekChange = (direction: 'prev' | 'next') => {
     setCurrentDate(prevDate => {
@@ -294,9 +260,6 @@ export default function OrdersList() {
                     Workers
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Services
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Due Date
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -307,9 +270,6 @@ export default function OrdersList() {
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Balance
-                  </th>
-                  <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
                   </th>
                 </tr>
               </thead>
@@ -342,19 +302,6 @@ export default function OrdersList() {
                         }
                       </div>
                     </td>
-                    <td className="px-6 py-4">
-                      <div className="flex flex-col space-y-1">
-                        {order.services.map(service => (
-                          <div key={service.id} className="flex items-center text-sm">
-                            <Package className="h-4 w-4 text-gray-400 mr-2" />
-                            <span className="text-gray-900">{service.service.name}</span>
-                            <span className="text-gray-500 ml-2">
-                              × {service.quantity}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center text-sm text-gray-900">
                         <Calendar className="h-4 w-4 text-gray-400 mr-2" />
@@ -382,31 +329,15 @@ export default function OrdersList() {
                             ? 'text-orange-600' 
                             : 'text-red-600'
                         }`}>
-                          {currencySymbol} {(order.total_amount - order.outstanding_balance).toFixed(2)}
+                          {currencySymbol} {(order.outstanding_balance).toFixed(2)}
                         </span>
                         <span className="text-xs text-gray-500 mt-0.5">
                           {order.payment_status === 'paid' 
                             ? 'Paid' 
                             : order.payment_status === 'partially_paid' 
-                            ? 'Partially Paid' 
+                            ? 'Outstanding' 
                             : 'Unpaid'}
                         </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
-                        <Link
-                          to={`/dashboard/orders/${order.id}`}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Link>
-                        <button
-                          onClick={() => handleDeleteOrder(order.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
                       </div>
                     </td>
                   </tr>
