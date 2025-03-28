@@ -495,7 +495,7 @@ export default function SalesOrdersList() {
                           {currencySymbol} {order.outstanding_balance.toFixed(2)}
                         </span>
                         <span className="text-xs text-gray-500 mt-0.5">
-                          {order.payment_status === 'partially_paid' ? 'Outstanding': 'Paid'}
+                          {order.payment_status === 'partially_paid' ? 'Outstanding' : order.payment_status == 'paid' ? 'Paid' : 'Unpaid'}
                         </span>
                       </div>
                     </td>
