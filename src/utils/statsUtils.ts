@@ -8,17 +8,17 @@ export function calculateWorkerStats(workerId: string, tasks: Task[]) {
   const dayStart = startOfDay(now);
   const dayEnd = endOfDay(now);
 
-  const workerTasks = tasks.filter(task => task.workerId === workerId);
+  const workerTasks = tasks.filter(task => task.worker_id === workerId);
   
   const allTime = workerTasks.length;
   
   const weekly = workerTasks.filter(task => {
-    const taskDate = new Date(task.date);
+    const taskDate = new Date(task.created_at);
     return isWithinInterval(taskDate, { start: weekStart, end: weekEnd });
   }).length;
   
   const daily = workerTasks.filter(task => {
-    const taskDate = new Date(task.date);
+    const taskDate = new Date(task.created_at);
     return isWithinInterval(taskDate, { start: dayStart, end: dayEnd });
   }).length;
 

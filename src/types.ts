@@ -1,15 +1,33 @@
 export interface Task {
   id: string;
-  workerId: string;
-  projectType: string;
-  date: string;
-  amount: number;
-  status: 'pending' | 'completed';
+  organization_id: string;
+  worker_id: string;
+  project_id: string;
   description?: string;
-  completedAt?: string;
-  addedAt: string; // New field
-  notes?: string;
-  deductions?: Deduction[];
+  due_date: string;
+  status: 'pending' | 'in_progress' | 'delayed' | 'completed';
+  amount: number;
+  completed_at?: string;
+  late_reason?: string;
+  created_at: string;
+  updated_at: string;
+  status_changed_at?: string;
+  delay_reason?: string;
+  order_id?: string;
+  project?: {
+    id: string;
+    name: string;
+  };
+  worker?: {
+    id: string;
+    name: string;
+  };
+  deductions?: {
+    id: string;
+    amount: number;
+    reason: string;
+    created_at: string;
+  }[];
 }
 
 export interface Deduction {

@@ -8,7 +8,7 @@ export function calculateWeeklyEarnings(tasks: Task[]): number {
 
   return tasks
     .filter(task => {
-      const taskDate = new Date(task.date);
+      const taskDate = new Date(task.due_date);
       return isWithinInterval(taskDate, { start: weekStart, end: weekEnd });
     })
     .reduce((total, task) => {

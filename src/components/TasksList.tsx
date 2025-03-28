@@ -51,7 +51,7 @@ interface Task {
   id: string;
   worker_id: string;
   project_id: string;
-  date: string;
+  due_date: string;
   amount: number;
   status: TaskStatus;
   description?: string;
@@ -125,7 +125,7 @@ export default function TasksList({ status }: TasksListProps) {
     worker_id: '',
     project_id: '',
     description: '',
-    date: new Date().toISOString().split('T')[0],
+    due_date: new Date().toISOString().split('T')[0],
     late_reason: ''
   });
   const [newDeduction, setNewDeduction] = useState({
@@ -174,8 +174,8 @@ export default function TasksList({ status }: TasksListProps) {
           )
         `)
         .eq('organization_id', orgId)
-        .gte('date', weekStart.toISOString())
-        .lte('date', weekEnd.toISOString())
+        .gte('created_at', weekStart.toISOString())
+        .lte('created_at', weekEnd.toISOString())
         .order('created_at', { ascending: false });
 
       if (status) {
@@ -225,7 +225,7 @@ export default function TasksList({ status }: TasksListProps) {
     if (!organization || !newTask.worker_id || !newTask.project_id) return;
 
     const projectRate = workerProjects.find(wp => wp.project_id === newTask.project_id)?.rate || 0;
-    const taskDate = new Date(newTask.date);
+    const taskDate = new Date(newTask.due_date);
     const today = startOfDay(new Date());
     const needsLateReason = isAfter(today, taskDate);
 
@@ -242,7 +242,7 @@ export default function TasksList({ status }: TasksListProps) {
           worker_id: newTask.worker_id,
           project_id: newTask.project_id,
           description: newTask.description.trim() || null,
-          date: newTask.date,
+          due_date: newTask.due_date,
           amount: projectRate,
           status: 'pending',
           late_reason: needsLateReason ? newTask.late_reason : null
@@ -260,7 +260,7 @@ export default function TasksList({ status }: TasksListProps) {
         worker_id: '',
         project_id: '',
         description: '',
-        date: new Date().toISOString().split('T')[0],
+        due_date: new Date().toISOString().split('T')[0],
         late_reason: ''
       });
       setShowAddTask(false);
@@ -545,17 +545,17 @@ export default function TasksList({ status }: TasksListProps) {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">Date *</label>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Due Date *</label>
               <input
                 type="date"
-                value={newTask.date}
-                onChange={(e) => setNewTask(prev => ({ ...prev, date: e.target.value }))}
+                value={newTask.due_date}
+                onChange={(e) => setNewTask(prev => ({ ...prev, due_date: e.target.value }))}
                 className="block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
                 max={new Date().toISOString().split('T')[0]}
               />
             </div>
 
-            {isAfter(startOfDay(new Date()), new Date(newTask.date)) && (
+            {isAfter(startOfDay(new Date()), new Date(newTask.due_date)) && (
               <div>
                 <label className="block text-sm font-medium text-gray-700">
                   Reason for Late Entry

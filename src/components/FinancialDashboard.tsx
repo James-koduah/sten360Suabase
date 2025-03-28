@@ -41,14 +41,14 @@ export default function FinancialDashboard() {
             )
           `)
           .eq('organization_id', organization.id)
-          .gte('date', weekStart.toISOString())
-          .lte('date', weekEnd.toISOString());
+          .gte('created_at', weekStart.toISOString())
+          .lte('created_at', weekEnd.toISOString());
 
         if (error) throw error;
 
         // Group tasks by date
         const groupedData = (tasksData || []).reduce((acc: Record<string, FinancialData>, task) => {
-          const date = task.date;
+          const date = task.created_at.split('T')[0]; // Get just the date part from the timestamp
           if (!acc[date]) {
             acc[date] = {
               date,

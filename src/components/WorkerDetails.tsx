@@ -83,8 +83,8 @@ export default function WorkerDetails() {
           deductions (*)
         `)
         .eq('worker_id', id)
-        .gte('date', weekStart.toISOString())
-        .lte('date', weekEnd.toISOString())
+        .gte('created_at', weekStart.toISOString())
+        .lte('created_at', weekEnd.toISOString())
         .order('created_at', { ascending: false });
 
       if (tasksError) throw tasksError;

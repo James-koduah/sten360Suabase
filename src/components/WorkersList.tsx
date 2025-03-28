@@ -23,12 +23,34 @@ interface Worker {
 
 interface Task {
   id: string;
+  organization_id: string;
   worker_id: string;
   project_id: string;
+  description?: string;
+  due_date: string;
+  status: 'pending' | 'in_progress' | 'delayed' | 'completed';
   amount: number;
-  date: string;
-  status: 'completed' | 'pending';
-  deductions?: { amount: number }[];
+  completed_at?: string;
+  late_reason?: string;
+  created_at: string;
+  updated_at: string;
+  status_changed_at?: string;
+  delay_reason?: string;
+  order_id?: string;
+  project?: {
+    id: string;
+    name: string;
+  };
+  worker?: {
+    id: string;
+    name: string;
+  };
+  deductions?: {
+    id: string;
+    amount: number;
+    reason: string;
+    created_at: string;
+  }[];
 }
 
 export default function WorkersList() {
@@ -104,7 +126,7 @@ export default function WorkersList() {
         
         // Filter tasks for current week
         const weeklyTasks = workerTasks.filter(task => 
-          isWithinInterval(new Date(task.date), { start: weekStart, end: weekEnd })
+          isWithinInterval(new Date(task.created_at), { start: weekStart, end: weekEnd })
         );
 
         // Get weekly completed and assigned tasks
@@ -131,7 +153,7 @@ export default function WorkersList() {
           allTimeTasks: workerTasks.length,
           weeklyTasks: weeklyTasks.length,
           dailyTasks: workerTasks.filter(task =>
-            isWithinInterval(new Date(task.date), { start: dayStart, end: dayEnd })
+            isWithinInterval(new Date(task.created_at), { start: dayStart, end: dayEnd })
           ).length
         };
 

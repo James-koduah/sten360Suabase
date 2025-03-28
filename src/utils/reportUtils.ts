@@ -6,13 +6,34 @@ import { CURRENCIES } from './constants';
 
 interface Task {
   id: string;
-  date: string;
+  organization_id: string;
+  worker_id: string;
   project_id: string;
-  description: string | null;
+  description?: string;
+  due_date: string;
+  status: 'pending' | 'in_progress' | 'delayed' | 'completed';
   amount: number;
-  status: 'pending' | 'completed';
-  completed_at: string | null;
-  deductions?: { amount: number; reason: string }[];
+  completed_at?: string;
+  late_reason?: string;
+  created_at: string;
+  updated_at: string;
+  status_changed_at?: string;
+  delay_reason?: string;
+  order_id?: string;
+  project?: {
+    id: string;
+    name: string;
+  };
+  worker?: {
+    id: string;
+    name: string;
+  };
+  deductions?: {
+    id: string;
+    amount: number;
+    reason: string;
+    created_at: string;
+  }[];
 }
 
 interface Worker {
@@ -119,7 +140,7 @@ export const generateWorkerReport = (
     autoTable(pdf, {
       startY: pdf.lastAutoTable.finalY,
       body: [
-        ['Date', format(new Date(task.date), 'MMM dd, yyyy')],
+        ['Date', format(new Date(task.due_date), 'MMM dd, yyyy')],
         ['Project', project?.name || 'Unknown Project'],
         ['Status', task.status.charAt(0).toUpperCase() + task.status.slice(1)],
         ['Completed', task.completed_at ? format(new Date(task.completed_at), 'MMM dd, yyyy HH:mm') : '-'],

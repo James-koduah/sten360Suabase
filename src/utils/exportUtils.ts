@@ -9,7 +9,7 @@ export function exportToExcel(tasks: Task[], worker: Worker) {
   
   // Format tasks for Excel
   const data = tasks.map(task => ({
-    Date: format(new Date(task.date), 'yyyy-MM-dd'),
+    Date: format(new Date(task.due_date), 'yyyy-MM-dd'),
     Project: task.projectType,
     Description: task.description || '',
     Amount: task.amount,

@@ -44,7 +44,7 @@ export default function WorkerTasks({
   const [newTask, setNewTask] = useState({
     project_id: '',
     description: '',
-    date: new Date().toISOString().split('T')[0],
+    due_date: new Date().toISOString().split('T')[0],
     late_reason: ''
   });
   const { confirm, addToast } = useUI();
@@ -101,7 +101,7 @@ export default function WorkerTasks({
     if (!organization || !worker || !newTask.project_id) return;
 
     const projectRate = workerProjects.find(wp => wp.project_id === newTask.project_id)?.rate || 0;
-    const taskDate = new Date(newTask.date);
+    const taskDate = new Date(newTask.due_date);
     const today = startOfDay(new Date());
     const needsLateReason = isAfter(today, taskDate);
 
@@ -122,7 +122,7 @@ export default function WorkerTasks({
           worker_id: worker.id,
           project_id: newTask.project_id,
           description: newTask.description.trim() || null,
-          date: newTask.date,
+          due_date: newTask.due_date,
           amount: projectRate,
           status: 'pending',
           late_reason: needsLateReason ? newTask.late_reason : null
@@ -139,7 +139,7 @@ export default function WorkerTasks({
       setNewTask({
         project_id: '',
         description: '',
-        date: new Date().toISOString().split('T')[0],
+        due_date: new Date().toISOString().split('T')[0],
         late_reason: ''
       });
       setShowAddTask(false);
@@ -277,14 +277,14 @@ export default function WorkerTasks({
                 <label className="block text-sm font-medium text-gray-700">Date</label>
                 <input
                   type="date"
-                  value={newTask.date}
-                  onChange={(e) => setNewTask(prev => ({ ...prev, date: e.target.value }))}
+                  value={newTask.due_date}
+                  onChange={(e) => setNewTask(prev => ({ ...prev, due_date: e.target.value }))}
                   className={baseInputClasses}
                   max={new Date().toISOString().split('T')[0]}
                 />
               </div>
 
-              {isAfter(startOfDay(new Date()), new Date(newTask.date)) && (
+              {isAfter(startOfDay(new Date()), new Date(newTask.due_date)) && (
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Reason for Late Entry
