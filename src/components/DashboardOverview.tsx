@@ -1,66 +1,121 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
-import { Users, ClipboardList, TrendingUp, DollarSign } from 'lucide-react';
+import { ShoppingCart, DollarSign, Package } from 'lucide-react';
 import { CURRENCIES } from '../utils/constants';
 import { Link } from 'react-router-dom';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface Stats {
-  totalWorkers: number;
-  pendingTasks: number;
-  inProgressTasks: number;
-  delayedTasks: number;
-  completedTasks: number;
-  totalPayouts: number;
+  activeOrders: number;
+  salesToday: number;
+  revenueToday: number;
+}
+
+interface DailyRevenue {
+  date: string;
+  revenue: number;
 }
 
 export default function DashboardOverview() {
   const { organization } = useAuthStore();
   const [stats, setStats] = useState<Stats>({
-    totalWorkers: 0,
-    pendingTasks: 0,
-    inProgressTasks: 0,
-    delayedTasks: 0,
-    completedTasks: 0,
-    totalPayouts: 0
+    activeOrders: 0,
+    salesToday: 0,
+    revenueToday: 0
   });
+  const [dailyRevenue, setDailyRevenue] = useState<DailyRevenue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const currencySymbol = CURRENCIES[organization.currency]?.symbol || organization.currency;
+  const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : '$';
 
   useEffect(() => {
     const loadStats = async () => {
       if (!organization) return;
 
       try {
-        // Get workers count
-        const { count: workersCount } = await supabase
-          .from('workers')
+        // Get today's date in ISO format
+        const today = new Date().toISOString().split('T')[0];
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        const thirtyDaysAgoStr = thirtyDaysAgo.toISOString().split('T')[0];
+
+        // Get active orders (not completed)
+        const { count: activeOrdersCount } = await supabase
+          .from('orders')
           .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organization.id);
+          .eq('organization_id', organization.id)
+          .not('status', 'eq', 'completed');
 
-        // Get tasks stats
-        const { data: tasksData } = await supabase
-          .from('tasks')
-          .select('status, amount, deductions(*)')
-          .eq('organization_id', organization.id);
+        // Get historical data for the past 30 days including today
+        const { data: historicalSalesData } = await supabase
+          .from('sales_orders')
+          .select('total_amount, outstanding_balance, created_at')
+          .eq('organization_id', organization.id)
+          .gte('created_at', thirtyDaysAgoStr)
+          .lte('created_at', today + 'T23:59:59');
 
-        const pendingTasks = tasksData?.filter(t => t.status === 'pending').length || 0;
-        const inProgressTasks = tasksData?.filter(t => t.status === 'in_progress').length || 0;
-        const delayedTasks = tasksData?.filter(t => t.status === 'delayed').length || 0;
-        const completedTasks = tasksData?.filter(t => t.status === 'completed').length || 0;
-        const totalPayouts = tasksData?.reduce((sum, task) => {
-          const deductions = task.deductions?.reduce((dSum, d) => dSum + (d.amount || 0), 0) || 0;
-          return sum + (task.amount - deductions);
-        }, 0) || 0;
+        const { data: historicalOrdersData } = await supabase
+          .from('orders')
+          .select('total_amount, outstanding_balance, created_at')
+          .eq('organization_id', organization.id)
+          .gte('created_at', thirtyDaysAgoStr)
+          .lte('created_at', today + 'T23:59:59');
+
+        const salesToday = historicalSalesData?.filter(sale => sale.created_at.startsWith(today)).length || 0;
+        
+        // Calculate total revenue from sales_orders
+        const salesRevenue = historicalSalesData?.filter(sale => sale.created_at.startsWith(today))
+          .reduce((sum, sale) => {
+            const paidAmount = (sale.total_amount || 0) - (sale.outstanding_balance || 0);
+            return sum + paidAmount;
+          }, 0) || 0;
+
+        // Calculate total revenue from orders
+        const ordersRevenue = historicalOrdersData?.filter(order => order.created_at.startsWith(today))
+          .reduce((sum, order) => {
+            const paidAmount = (order.total_amount || 0) - (order.outstanding_balance || 0);
+            return sum + paidAmount;
+          }, 0) || 0;
+
+        const revenueToday = salesRevenue + ordersRevenue;
+
+        // Process historical data for the chart
+        const revenueByDate = new Map<string, number>();
+        
+        // Initialize all dates in the range with 0
+        const currentDate = new Date();
+        for (let i = 0; i < 30; i++) {
+          const date = new Date(currentDate);
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          revenueByDate.set(dateStr, 0);
+        }
+        
+        // Process sales orders
+        historicalSalesData?.forEach(sale => {
+          const date = sale.created_at.split('T')[0];
+          const paidAmount = (sale.total_amount || 0) - (sale.outstanding_balance || 0);
+          revenueByDate.set(date, (revenueByDate.get(date) || 0) + paidAmount);
+        });
+
+        // Process orders
+        historicalOrdersData?.forEach(order => {
+          const date = order.created_at.split('T')[0];
+          const paidAmount = (order.total_amount || 0) - (order.outstanding_balance || 0);
+          revenueByDate.set(date, (revenueByDate.get(date) || 0) + paidAmount);
+        });
+
+        // Convert to array and sort by date
+        const dailyRevenueData = Array.from(revenueByDate.entries())
+          .map(([date, revenue]) => ({ date, revenue }))
+          .sort((a, b) => a.date.localeCompare(b.date));
 
         setStats({
-          totalWorkers: workersCount || 0,
-          pendingTasks,
-          inProgressTasks,
-          delayedTasks,
-          completedTasks,
-          totalPayouts
+          activeOrders: activeOrdersCount || 0,
+          salesToday,
+          revenueToday
         });
+        setDailyRevenue(dailyRevenueData);
       } catch (error) {
         console.error('Error loading stats:', error);
       } finally {
@@ -74,8 +129,8 @@ export default function DashboardOverview() {
   if (isLoading) {
     return (
       <div className="animate-pulse">
-        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
+        <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+          {[...Array(3)].map((_, i) => (
             <div key={i} className="bg-white overflow-hidden shadow rounded-lg">
               <div className="p-5">
                 <div className="h-8 bg-gray-200 rounded w-1/2 mb-4"></div>
@@ -90,58 +145,34 @@ export default function DashboardOverview() {
 
   const statCards = [
     {
-      name: 'Total Workers',
-      value: stats.totalWorkers,
-      icon: Users,
+      name: 'Active Orders',
+      value: stats.activeOrders,
+      icon: ShoppingCart,
       color: 'text-blue-600',
       bg: 'bg-blue-100',
-      link: '/dashboard/workers'
+      link: '/dashboard/orders'
     },
     {
-      name: 'Assigned Tasks',
-      value: stats.pendingTasks,
-      icon: ClipboardList,
-      color: 'text-yellow-600',
-      bg: 'bg-yellow-100',
-      link: '/dashboard/tasks/pending'
-    },
-    {
-      name: 'In Progress',
-      value: stats.inProgressTasks,
-      icon: ClipboardList,
-      color: 'text-blue-600',
-      bg: 'bg-blue-100',
-      link: '/dashboard/tasks/in_progress'
-    },
-    {
-      name: 'Delayed Tasks',
-      value: stats.delayedTasks,
-      icon: ClipboardList,
-      color: 'text-red-600',
-      bg: 'bg-red-100',
-      link: '/dashboard/tasks/delayed'
-    },
-    {
-      name: 'Completed Tasks',
-      value: stats.completedTasks,
-      icon: TrendingUp,
+      name: 'Sales Today',
+      value: stats.salesToday,
+      icon: Package,
       color: 'text-green-600',
       bg: 'bg-green-100',
-      link: '/dashboard/tasks/completed'
+      link: '/dashboard/sales'
     },
     {
-      name: 'Total Payouts',
-      value: `${currencySymbol} ${stats.totalPayouts.toFixed(2)}`,
+      name: 'Revenue Today',
+      value: `${currencySymbol} ${stats.revenueToday.toFixed(2)}`,
       icon: DollarSign,
       color: 'text-purple-600',
       bg: 'bg-purple-100',
-      link: '/dashboard/finances'
+      link: '/dashboard/revenue'
     }
   ];
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {statCards.map((stat) => (
           <Link
             key={stat.name}
@@ -167,38 +198,74 @@ export default function DashboardOverview() {
 
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:p-6">
+          <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Revenue Over Time</h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={dailyRevenue}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis 
+                  dataKey="date" 
+                  tickFormatter={(date: string) => new Date(date).toLocaleDateString()}
+                  interval={0}
+                  angle={-45}
+                  textAnchor="end"
+                  height={80}
+                  tick={{ fontSize: 12 }}
+                />
+                <YAxis 
+                  tickFormatter={(value: number) => `${currencySymbol}${value.toFixed(0)}`}
+                  tick={{ fontSize: 12 }}
+                />
+                <Tooltip 
+                  formatter={(value: number) => [`${currencySymbol}${value.toFixed(2)}`, 'Revenue']}
+                  labelFormatter={(date: string) => new Date(date).toLocaleDateString()}
+                />
+                <Bar 
+                  dataKey="revenue" 
+                  fill="#8B5CF6"
+                  barSize={5}
+                  radius={[2, 2, 0, 0]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-4 py-5 sm:p-6">
           <h3 className="text-lg font-medium leading-6 text-gray-900">Quick Actions</h3>
           <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
             <Link
-              to="/dashboard/workers"
+              to="/dashboard/orders"
               className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
             >
               <div className={`flex-shrink-0 bg-blue-100 rounded-md p-3`}>
-                <Users className="h-6 w-6 text-blue-600" aria-hidden="true" />
+                <ShoppingCart className="h-6 w-6 text-blue-600" aria-hidden="true" />
               </div>
               <div className="flex-1 min-w-0">
                 <span className="absolute inset-0" aria-hidden="true" />
-                <p className="text-sm font-medium text-gray-900">Manage Workers</p>
-                <p className="text-sm text-gray-500">Add or edit worker details</p>
+                <p className="text-sm font-medium text-gray-900">Manage Orders</p>
+                <p className="text-sm text-gray-500">View and process orders</p>
               </div>
             </Link>
 
             <Link
-              to="/dashboard/tasks"
+              to="/dashboard/products"
               className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
             >
-              <div className={`flex-shrink-0 bg-yellow-100 rounded-md p-3`}>
-                <ClipboardList className="h-6 w-6 text-yellow-600" aria-hidden="true" />
+              <div className={`flex-shrink-0 bg-green-100 rounded-md p-3`}>
+                <Package className="h-6 w-6 text-green-600" aria-hidden="true" />
               </div>
               <div className="flex-1 min-w-0">
                 <span className="absolute inset-0" aria-hidden="true" />
-                <p className="text-sm font-medium text-gray-900">Manage Tasks</p>
-                <p className="text-sm text-gray-500">Create and track tasks</p>
+                <p className="text-sm font-medium text-gray-900">Manage Products</p>
+                <p className="text-sm text-gray-500">Add or edit products</p>
               </div>
             </Link>
 
             <Link
-              to="/dashboard/finances"
+              to="/dashboard/analytics"
               className="relative rounded-lg border border-gray-300 bg-white px-6 py-5 shadow-sm flex items-center space-x-3 hover:border-gray-400 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500"
             >
               <div className={`flex-shrink-0 bg-purple-100 rounded-md p-3`}>
@@ -206,8 +273,8 @@ export default function DashboardOverview() {
               </div>
               <div className="flex-1 min-w-0">
                 <span className="absolute inset-0" aria-hidden="true" />
-                <p className="text-sm font-medium text-gray-900">Financial Reports</p>
-                <p className="text-sm text-gray-500">View and export financial data</p>
+                <p className="text-sm font-medium text-gray-900">Sales Analytics</p>
+                <p className="text-sm text-gray-500">View sales reports and trends</p>
               </div>
             </Link>
           </div>

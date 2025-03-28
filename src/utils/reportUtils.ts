@@ -60,54 +60,63 @@ export const generateWorkerReport = (
   endDate: Date,
   currency: string = 'GHS'
 ) => {
-  // Generate PDF Report
   const pdf = new jsPDF();
   
-  // Add header with proper styling
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(20);
-  pdf.text(`Worker Report: ${worker.name}`, 14, 20);
+  // Set default font and size for the entire document
   pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(12);
-  pdf.text(`Period: ${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`, 14, 30);
+  pdf.setFontSize(9);
+  
+  // Add header with modern styling
+  pdf.setFillColor(17, 24, 39);
+  pdf.rect(0, 0, 210, 25, 'F');
+  pdf.setTextColor(255);
+  pdf.setFontSize(14);
+  pdf.text(`Worker Report: ${worker.name}`, 14, 18);
+  
+  // Reset text color and add period
+  pdf.setTextColor(0);
+  pdf.setFontSize(8);
+  pdf.text(`Period: ${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}`, 14, 28);
 
+  // Get the correct currency symbol and ensure it's properly encoded
   const currencySymbol = CURRENCIES[currency]?.symbol || currency;
+  
+  // Function to format currency values
+  const formatCurrency = (amount: number) => {
+    // Use a more reliable way to display currency
+    return `${currencySymbol} ${amount.toFixed(2)}`;
+  };
 
   // Calculate totals
-  // Calculate stats
   const completedTasks = tasks.filter(t => t.status === 'completed');
   const assignedTasks = tasks.filter(t => t.status === 'pending');
-
-  // Calculate deductions from completed tasks only
   const totalDeductions = completedTasks.reduce((sum, task) => 
     sum + (task.deductions?.reduce((dSum, d) => dSum + d.amount, 0) || 0), 0);
-  
-  // Calculate completed earnings (from completed tasks only)
   const completedEarnings = completedTasks.reduce((sum, task) => {
     const deductions = task.deductions?.reduce((dSum, d) => dSum + d.amount, 0) || 0;
     return sum + (task.amount - deductions);
   }, 0);
-
-  // Calculate weekly projects total
   const weeklyProjectTotal = tasks.reduce((sum, task) => sum + task.amount, 0);
 
-  // Add summary
+  // Add summary section with modern styling
+  pdf.setFillColor(249, 250, 251);
+  pdf.rect(10, 35, 190, 35, 'F');
+  
   pdf.setFont('helvetica', 'bold');
-  pdf.text('Summary:', 14, 40);
-  const summaryStartY = 48;
+  pdf.setFontSize(10);
+  pdf.text('Summary', 14, 42);
+  
   pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  const summaryStartY = 50;
   pdf.text(`Total Tasks: ${tasks.length}`, 20, summaryStartY);
-  pdf.text(`Assigned Tasks: ${assignedTasks.length}`, 20, summaryStartY + 8);
-  pdf.text(`Completed Tasks: ${completedTasks.length}`, 20, summaryStartY + 16);
-  pdf.text(`Weekly Project Total: ${currencySymbol} ${weeklyProjectTotal.toFixed(2)}`, 20, summaryStartY + 24);
-  pdf.text(`Completed Earnings: ${currencySymbol} ${completedEarnings.toFixed(2)}`, 20, summaryStartY + 32);
+  pdf.text(`Assigned Tasks: ${assignedTasks.length}`, 20, summaryStartY + 6);
+  pdf.text(`Completed Tasks: ${completedTasks.length}`, 20, summaryStartY + 12);
+  pdf.text(`Weekly Project Total: ${formatCurrency(weeklyProjectTotal)}`, 20, summaryStartY + 18);
+  pdf.text(`Completed Earnings: ${formatCurrency(completedEarnings)}`, 20, summaryStartY + 24);
 
-  // Add tasks details
-  pdf.setFont('helvetica', 'bold');
-  pdf.text('Tasks Details:', 14, summaryStartY + 56);
-  pdf.setFont('helvetica', 'normal');
-
-  let yPos = summaryStartY + 70;
+  // Add tasks details with improved styling
+  let yPos = 80;
   tasks.forEach((task, index) => {
     const project = workerProjects.find(wp => wp.project_id === task.project_id)?.project;
     const deductionsTotal = task.deductions?.reduce((sum, d) => sum + d.amount, 0) || 0;
@@ -119,58 +128,61 @@ export const generateWorkerReport = (
       yPos = 20;
     }
 
-    // Task header with proper styling
+    // Task header with modern styling
     autoTable(pdf, {
       startY: yPos,
       head: [[{
         content: `Task ${index + 1}`,
-        styles: { halign: 'left', fillColor: [37, 99, 235] }
+        styles: { 
+          halign: 'left', 
+          fillColor: [17, 24, 39],
+          textColor: 255,
+          fontSize: 8,
+          fontStyle: 'bold'
+        }
       }]],
       theme: 'plain',
       headStyles: {
-        textColor: 255,
-        fontSize: 12,
-        fontStyle: 'bold',
-        cellPadding: 8
+        cellPadding: 4
       },
-      margin: { left: 20 }
+      margin: { left: 14 }
     });
 
-    // Task details in a clean table format
+    // Task details with improved styling
     autoTable(pdf, {
-      startY: pdf.lastAutoTable.finalY,
+      startY: (pdf as any).lastAutoTable.finalY,
       body: [
         ['Date', format(new Date(task.due_date), 'MMM dd, yyyy')],
         ['Project', project?.name || 'Unknown Project'],
         ['Status', task.status.charAt(0).toUpperCase() + task.status.slice(1)],
         ['Completed', task.completed_at ? format(new Date(task.completed_at), 'MMM dd, yyyy HH:mm') : '-'],
-        ['Amount', `${currencySymbol} ${task.amount.toFixed(2)}`],
-        ['Deductions', `${currencySymbol} ${deductionsTotal.toFixed(2)}`],
-        ['Net Amount', `${currencySymbol} ${taskNet.toFixed(2)}`]
+        ['Amount', formatCurrency(task.amount)],
+        ['Deductions', formatCurrency(deductionsTotal)],
+        ['Net Amount', formatCurrency(taskNet)]
       ],
-      theme: 'striped',
+      theme: 'plain',
       styles: {
-        fontSize: 10,
-        cellPadding: 8,
+        fontSize: 7,
+        cellPadding: 4,
         overflow: 'linebreak',
         minCellWidth: 80
       },
       columnStyles: {
-        0: { fontStyle: 'bold', fillColor: [243, 244, 246] }
+        0: { fontStyle: 'bold', fillColor: [249, 250, 251] }
       },
-      margin: { left: 20 }
+      margin: { left: 14 }
     });
 
     // Add description if exists
     if (task.description) {
       autoTable(pdf, {
-        startY: pdf.lastAutoTable.finalY + 2,
+        startY: (pdf as any).lastAutoTable.finalY + 1,
         head: [['Description']],
         body: [[task.description]],
         theme: 'plain',
         styles: {
-          fontSize: 10,
-          cellPadding: 8,
+          fontSize: 7,
+          cellPadding: 4,
           overflow: 'linebreak',
           cellWidth: 'wrap'
         },
@@ -179,25 +191,25 @@ export const generateWorkerReport = (
           textColor: [120, 53, 15],
           fontStyle: 'bold'
         },
-        margin: { left: 20 }
+        margin: { left: 14 }
       });
     }
 
     // Add deductions details if exists
     if (task.deductions?.length) {
       const deductionsData = task.deductions.map(d => [
-        `GHS ${d.amount.toFixed(2)}`,
+        formatCurrency(d.amount),
         d.reason
       ]);
 
       autoTable(pdf, {
-        startY: pdf.lastAutoTable.finalY + 2,
+        startY: (pdf as any).lastAutoTable.finalY + 1,
         head: [['Deduction Amount', 'Deduction Reason']],
         body: deductionsData,
         theme: 'plain',
         styles: {
-          fontSize: 10,
-          cellPadding: 8,
+          fontSize: 7,
+          cellPadding: 4,
           overflow: 'linebreak'
         },
         headStyles: {
@@ -205,24 +217,24 @@ export const generateWorkerReport = (
           textColor: [127, 29, 29],
           fontStyle: 'bold'
         },
-        margin: { left: 20 }
+        margin: { left: 14 }
       });
     }
 
-    yPos = pdf.lastAutoTable.finalY + 15;
+    yPos = (pdf as any).lastAutoTable.finalY + 8;
   });
 
-  // Generate WhatsApp message
+  // Generate WhatsApp message with improved formatting
   const whatsappMessage = `
 *Work Report for ${worker.name}*
 Period: ${format(startDate, 'MMM dd, yyyy')} - ${format(endDate, 'MMM dd, yyyy')}
 
 *Summary*
-Total Tasks: ${tasks.length} 
-Assigned Tasks: ${assignedTasks.length}
-Tasks Completed: ${completedTasks.length}
-Weekly Project Total: ${currencySymbol} ${weeklyProjectTotal.toFixed(2)}
-Completed Earnings: ${currencySymbol} ${completedEarnings.toFixed(2)}
+• Total Tasks: ${tasks.length} 
+• Assigned Tasks: ${assignedTasks.length}
+• Tasks Completed: ${completedTasks.length}
+• Weekly Project Total: ${formatCurrency(weeklyProjectTotal)}
+• Completed Earnings: ${formatCurrency(completedEarnings)}
 
 Your detailed report has been attached as a PDF.
 
