@@ -3,26 +3,27 @@ import { Plus, Search, Edit2, Trash2, Package, ChevronDown } from 'lucide-react'
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
-import { Product, ProductCategory } from '../../types/inventory';
-import { STANDARD_CATEGORIES, getCategoryLabel, getCategoryColor } from '../../utils/inventory-constants';
+import { Product } from '../../types/inventory';
 import { CURRENCIES } from '../../utils/constants';
 import CreateProductForm from './CreateProductForm';
+import CreateCategoryForm from './CreateCategoryForm';
 
 export default function ProductsList() {
   const [products, setProducts] = useState<Product[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [categoryFilter, setCategoryFilter] = useState<ProductCategory | 'all'>('all');
+  const [categoryFilter, setCategoryFilter] = useState<string>('all');
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showCategoryDropdown, setShowCategoryDropdown] = useState(false);
   const [categorySearch, setCategorySearch] = useState('');
+  const [showAddCategory, setShowAddCategory] = useState(false);
   const { organization } = useAuthStore();
   const { confirm, addToast } = useUI();
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : '';
 
   // Extract unique categories from products
   const allCategories = useMemo(() => {
-    const categories = new Set<ProductCategory>();
+    const categories = new Set<string>();
     products.forEach(product => categories.add(product.category));
     return Array.from(categories).sort();
   }, [products]);
@@ -31,7 +32,7 @@ export default function ProductsList() {
   const filteredCategories = useMemo(() => {
     if (!categorySearch) return allCategories;
     return allCategories.filter(category => 
-      getCategoryLabel(category).toLowerCase().includes(categorySearch.toLowerCase())
+      category.toLowerCase().includes(categorySearch.toLowerCase())
     );
   }, [allCategories, categorySearch]);
 
@@ -105,6 +106,32 @@ export default function ProductsList() {
      product.description?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  const loadCategories = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .order('name');
+
+      if (error) throw error;
+
+      // Assuming you want to set categories in a state
+      // setCategories(data || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to load categories'
+      });
+    }
+  };
+
+  // Call loadCategories when the component mounts or when needed
+  useEffect(() => {
+    loadCategories();
+  }, []);
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -120,13 +147,22 @@ export default function ProductsList() {
           <h2 className="text-2xl font-bold text-gray-900">Products</h2>
           <p className="text-sm text-gray-500 mt-1">Manage your inventory</p>
         </div>
-        <button
-          onClick={() => setShowAddProduct(true)}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Product
-        </button>
+        <div className="flex space-x-2">
+          <button
+            onClick={() => setShowAddProduct(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Product
+          </button>
+          <button
+            onClick={() => setShowAddCategory(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors duration-200"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Category
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
@@ -148,7 +184,7 @@ export default function ProductsList() {
             className="inline-flex items-center justify-between w-full sm:w-48 rounded-lg border border-gray-300 py-2 pl-3 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           >
             <span className="truncate">
-              {categoryFilter === 'all' ? 'All Categories' : getCategoryLabel(categoryFilter)}
+              {categoryFilter === 'all' ? 'All Categories' : categoryFilter}
             </span>
             <ChevronDown className="h-4 w-4 text-gray-400" />
           </button>
@@ -185,7 +221,7 @@ export default function ProductsList() {
                       setCategorySearch('');
                     }}
                   >
-                    {getCategoryLabel(category)}
+                    {category}
                   </div>
                 ))}
               </div>
@@ -208,9 +244,6 @@ export default function ProductsList() {
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Category
-                </th>
-                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                  SKU
                 </th>
                 <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Unit Price
@@ -240,16 +273,9 @@ export default function ProductsList() {
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                      getCategoryColor(product.category).bg
-                    } ${
-                      getCategoryColor(product.category).text
-                    }`}>
-                      {getCategoryLabel(product.category)}
+                    <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                      {product.category}
                     </span>
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                    {product.sku}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                     {currencySymbol} {product.unit_price.toFixed(2)}
@@ -301,6 +327,20 @@ export default function ProductsList() {
               <CreateProductForm
                 onClose={() => setShowAddProduct(false)}
                 onSuccess={loadProducts}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAddCategory && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowAddCategory(false)} />
+            <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl">
+              <CreateCategoryForm
+                onClose={() => setShowAddCategory(false)}
+                onSuccess={loadCategories}
               />
             </div>
           </div>

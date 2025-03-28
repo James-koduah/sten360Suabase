@@ -15,6 +15,7 @@ import FinancialDashboard from './FinancialDashboard';
 import ServicesList from './services/ServicesList';
 import ProductsList from './inventory/ProductsList';
 import SalesOrdersList from './inventory/SalesOrdersList';
+import SalesOrderDetails from './inventory/SalesOrderDetails';
 
 export default function Dashboard() {
   const { user, organization } = useAuthStore();
@@ -117,6 +118,7 @@ export default function Dashboard() {
           <Route path="tasks/completed" element={<TasksList status="completed" />} />
           <Route path="inventory" element={<ProductsList />} />
           <Route path="sales" element={<SalesOrdersList />} />
+          <Route path="sales/:id" element={<SalesOrderDetails />} />
           <Route path="finances" element={<FinancialDashboard />} />
           <Route path="settings" element={<Settings />} />
           <Route path="settings/services" element={<ServicesList />} />

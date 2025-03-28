@@ -9,6 +9,7 @@ import { CURRENCIES } from '../../utils/constants';
 import { format } from 'date-fns';
 import CreateSalesOrderForm from './CreateSalesOrderForm';
 import { RecordPayment } from '../orders/RecordPayment';
+import { Link } from 'react-router-dom';
 
 type PaymentStatus = keyof typeof PAYMENT_STATUS_LABELS;
 
@@ -448,9 +449,12 @@ export default function SalesOrdersList() {
                 {filteredOrders.map(order => (
                   <tr key={order.id}>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-gray-900">
+                      <Link
+                        to={`/dashboard/sales/${order.id}`}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-900"
+                      >
                         {order.order_number}
-                      </div>
+                      </Link>
                       <div className="text-xs text-gray-500">
                         {format(new Date(order.created_at), 'MMM d, yyyy')}
                       </div>
@@ -517,12 +521,12 @@ export default function SalesOrdersList() {
                             <CreditCard className="h-4 w-4" />
                           </button>
                         )}
-                        <button
-                          onClick={() => {/* TODO: Implement edit */}}
+                        {/* <button
+                          onClick={() => {}}
                           className="text-blue-600 hover:text-blue-900"
                         >
                           <Edit2 className="h-4 w-4" />
-                        </button>
+                        </button> */}
                         <button
                           onClick={() => handleDeleteOrder(order.id)}
                           className="text-red-600 hover:text-red-900"

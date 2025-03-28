@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Minus, Loader2, Package } from 'lucide-react';
+import { X, Plus, Minus, Loader2, Package, CreditCard } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
@@ -39,6 +39,10 @@ export default function CreateSalesOrderForm({ onClose, onSuccess }: CreateSales
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : '';
   const [isLoadingClients, setIsLoadingClients] = useState(true);
   const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [showPaymentSection, setShowPaymentSection] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('');
+  const [paymentReference, setPaymentReference] = useState('');
 
   useEffect(() => {
     if (organization) {
@@ -231,6 +235,45 @@ export default function CreateSalesOrderForm({ onClose, onSuccess }: CreateSales
 
       if (itemsError) throw itemsError;
 
+      // Deduct inventory stock for each product
+      for (const item of orderItems) {
+        if (!item.is_custom_item && item.product_id && item.product) {
+          const { error: stockError } = await supabase
+            .from('products')
+            .update({ stock_quantity: item.product.stock_quantity - item.quantity })
+            .eq('id', item.product_id);
+
+          if (stockError) throw stockError;
+        }
+      }
+
+      // Handle initial payment if provided
+      if (showPaymentSection && paymentAmount && paymentMethod) {
+        const numericAmount = parseFloat(paymentAmount);
+        if (isNaN(numericAmount) || numericAmount <= 0) {
+          throw new Error('Invalid payment amount');
+        }
+
+        if (numericAmount > getTotalAmount()) {
+          throw new Error('Payment amount cannot exceed total amount');
+        }
+
+        const { data: { user }, error: userError } = await supabase.auth.getUser();
+        if (userError) throw userError;
+        if (!user) throw new Error('User not authenticated');
+
+        const { error: paymentError } = await supabase.rpc('record_payment', {
+          p_organization_id: organization.id,
+          p_order_id: orderData.id,
+          p_amount: numericAmount,
+          p_payment_method: paymentMethod,
+          p_payment_reference: paymentReference || null,
+          p_recorded_by: user.id
+        });
+
+        if (paymentError) throw paymentError;
+      }
+
       addToast({
         type: 'success',
         title: 'Order Created',
@@ -244,7 +287,7 @@ export default function CreateSalesOrderForm({ onClose, onSuccess }: CreateSales
       addToast({
         type: 'error',
         title: 'Error',
-        message: 'Failed to create order'
+        message: error instanceof Error ? error.message : 'Failed to create order'
       });
     } finally {
       setIsSubmitting(false);
@@ -462,6 +505,82 @@ export default function CreateSalesOrderForm({ onClose, onSuccess }: CreateSales
             placeholder="Add any notes about this order"
           />
         </div>
+
+        {orderItems.length > 0 && (
+          <div className="border rounded-lg p-4 space-y-4">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-medium text-gray-900 flex items-center">
+                <CreditCard className="h-4 w-4 mr-2 text-gray-500" />
+                Initial Payment
+              </h4>
+              <button
+                type="button"
+                onClick={() => setShowPaymentSection(!showPaymentSection)}
+                className="text-sm text-blue-600 hover:text-blue-900"
+              >
+                {showPaymentSection ? 'Cancel Payment' : 'Add Payment'}
+              </button>
+            </div>
+
+            {showPaymentSection && (
+              <div className="space-y-4 pt-4 border-t">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Payment Amount *
+                  </label>
+                  <div className="mt-1 relative rounded-md shadow-sm">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                      <span className="text-gray-500 sm:text-sm">{currencySymbol}</span>
+                    </div>
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={getTotalAmount()}
+                      value={paymentAmount}
+                      onChange={(e) => setPaymentAmount(e.target.value)}
+                      className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Payment Method *
+                  </label>
+                  <select
+                    value={paymentMethod}
+                    onChange={(e) => setPaymentMethod(e.target.value)}
+                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                    required
+                  >
+                    <option value="">Select a payment method</option>
+                    <option value="mobile_money">Mobile Money</option>
+                    <option value="cash">Cash</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="credit_card">Credit Card</option>
+                    <option value="check">Check</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Payment Reference
+                  </label>
+                  <input
+                    type="text"
+                    value={paymentReference}
+                    onChange={(e) => setPaymentReference(e.target.value)}
+                    className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                    placeholder="e.g., Check number, Transaction ID"
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="flex justify-end space-x-3 pt-4 border-t">
