@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Minus, Loader2, Package, CreditCard } from 'lucide-react';
+import { X, Plus, Minus, Loader2, Package, CreditCard, User } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
@@ -43,6 +43,14 @@ export default function CreateSalesOrderForm({ onClose, onSuccess }: CreateSales
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
   const [paymentReference, setPaymentReference] = useState('');
+  const [showNewClientModal, setShowNewClientModal] = useState(false);
+  const [newClient, setNewClient] = useState({
+    name: '',
+    phone: '',
+    address: '',
+    email: ''
+  });
+  const [isCreatingClient, setIsCreatingClient] = useState(false);
 
   useEffect(() => {
     if (organization) {
@@ -294,6 +302,53 @@ export default function CreateSalesOrderForm({ onClose, onSuccess }: CreateSales
     }
   };
 
+  const handleCreateClient = async () => {
+    if (!organization?.id || !newClient.name.trim()) return;
+
+    setIsCreatingClient(true);
+    try {
+      const { data: clientData, error } = await supabase
+        .from('clients')
+        .insert([{
+          organization_id: organization.id,
+          name: newClient.name.trim(),
+          phone: newClient.phone.trim(),
+          address: newClient.address.trim(),
+          email: newClient.email.trim()
+        }])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add the new client to the list and select it
+      setClients(prev => [...prev, clientData]);
+      setSelectedClient(clientData.id);
+      setShowNewClientModal(false);
+      setNewClient({
+        name: '',
+        phone: '',
+        address: '',
+        email: ''
+      });
+
+      addToast({
+        type: 'success',
+        title: 'Client Created',
+        message: 'New client has been created successfully.'
+      });
+    } catch (error) {
+      console.error('Error creating client:', error);
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to create client'
+      });
+    } finally {
+      setIsCreatingClient(false);
+    }
+  };
+
   if (isLoadingClients || isLoadingProducts) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -317,9 +372,19 @@ export default function CreateSalesOrderForm({ onClose, onSuccess }: CreateSales
 
       <div className="space-y-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700">
-            Client *
-          </label>
+          <div className="flex justify-between items-center mb-1">
+            <label className="block text-sm font-medium text-gray-700">
+              Client *
+            </label>
+            <button
+              type="button"
+              onClick={() => setShowNewClientModal(true)}
+              className="inline-flex items-center text-sm text-blue-600 hover:text-blue-900"
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              New Client
+            </button>
+          </div>
           <select
             required
             value={selectedClient}
@@ -334,6 +399,90 @@ export default function CreateSalesOrderForm({ onClose, onSuccess }: CreateSales
             ))}
           </select>
         </div>
+
+        {/* New Client Modal */}
+        {showNewClientModal && (
+          <div className="fixed inset-0 bg-gray-500 bg-opacity-75 flex items-center justify-center p-4 z-50">
+            <div className="bg-white rounded-lg max-w-md w-full p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Create New Client</h3>
+                <button
+                  type="button"
+                  onClick={() => setShowNewClientModal(false)}
+                  className="text-gray-400 hover:text-gray-500"
+                >
+                  <X className="h-5 w-5" />
+                </button>
+              </div>
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Name *</label>
+                  <input
+                    type="text"
+                    value={newClient.name}
+                    onChange={(e) => setNewClient(prev => ({ ...prev, name: e.target.value }))}
+                    className="mt-1 block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                    placeholder="Enter client name"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Email</label>
+                  <input
+                    type="email"
+                    value={newClient.email}
+                    onChange={(e) => setNewClient(prev => ({ ...prev, email: e.target.value }))}
+                    className="mt-1 block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                    placeholder="Enter email address"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Phone</label>
+                  <input
+                    type="tel"
+                    value={newClient.phone}
+                    onChange={(e) => setNewClient(prev => ({ ...prev, phone: e.target.value }))}
+                    className="mt-1 block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                    placeholder="Enter phone number"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Address</label>
+                  <textarea
+                    value={newClient.address}
+                    onChange={(e) => setNewClient(prev => ({ ...prev, address: e.target.value }))}
+                    rows={3}
+                    className="mt-1 block w-full rounded-md border border-gray-300 py-2 px-3 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-blue-500 sm:text-sm"
+                    placeholder="Enter address"
+                  />
+                </div>
+                <div className="flex justify-end space-x-3 pt-4">
+                  <button
+                    type="button"
+                    onClick={() => setShowNewClientModal(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCreateClient}
+                    disabled={!newClient.name.trim() || isCreatingClient}
+                    className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
+                  >
+                    {isCreatingClient ? (
+                      <>
+                        <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                        Creating...
+                      </>
+                    ) : (
+                      'Create Client'
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div>
           <label className="block text-sm font-medium text-gray-700">

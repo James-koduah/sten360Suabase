@@ -23,6 +23,7 @@ interface Client {
   custom_fields?: CustomField[];
   total_balance: number;
   orders?: Array<{ outstanding_balance: number }>;
+  sales_orders?: Array<{ outstanding_balance: number }>;
 }
 
 interface NewCustomField {
@@ -70,18 +71,24 @@ export default function ClientsList() {
         .select(`
           *,
           custom_fields:client_custom_fields(*),
-          orders:orders(outstanding_balance)
+          orders:orders(outstanding_balance),
+          sales_orders:sales_orders(outstanding_balance)
         `)
         .eq('organization_id', organization.id)
         .order('name');
 
       if (clientsError) throw clientsError;
 
-      // Calculate total balance for each client
-      const clientsWithBalance = clientsData?.map(client => ({
-        ...client,
-        total_balance: client.orders?.reduce((sum: number, order: any) => sum + (order.outstanding_balance || 0), 0) || 0
-      })) || [];
+      // Calculate total balance for each client from both orders and sales_orders
+      const clientsWithBalance = clientsData?.map(client => {
+        const ordersBalance = client.orders?.reduce((sum: number, order: any) => sum + (order.outstanding_balance || 0), 0) || 0;
+        const salesOrdersBalance = client.sales_orders?.reduce((sum: number, order: any) => sum + (order.outstanding_balance || 0), 0) || 0;
+        
+        return {
+          ...client,
+          total_balance: ordersBalance + salesOrdersBalance
+        };
+      }) || [];
 
       setClients(clientsWithBalance);
     } catch (error) {
@@ -604,7 +611,12 @@ export default function ClientsList() {
                           className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
                         />
                       ) : (
-                        <div className="text-sm font-medium text-gray-900">{client.name}</div>
+                        <Link
+                          to={`/clients/${client.id}`}
+                          className="text-sm font-medium text-blue-600 hover:text-blue-800"
+                        >
+                          {client.name}
+                        </Link>
                       )}
                     </td>
                     <td className="px-6 py-4">
@@ -794,18 +806,12 @@ export default function ClientsList() {
                           {currencySymbol} {client.total_balance.toFixed(2)}
                         </span>
                         <span className="text-xs text-gray-500 mt-0.5">
-                          Outstanding
+                          Total Outstanding
                         </span>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end space-x-2">
-                        <Link
-                          to={`/clients/${client.id}`}
-                          className="text-blue-600 hover:text-blue-800"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Link>
+                      <div className="flex justify-end">
                         <button
                           onClick={() => handleDeleteClient(client.id)}
                           className="text-red-600 hover:text-red-900"
