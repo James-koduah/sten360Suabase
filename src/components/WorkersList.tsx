@@ -76,12 +76,20 @@ export default function WorkersList() {
       // Validate file type
       const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
       if (!allowedTypes.includes(file.type)) {
-        alert('Please upload a JPG, JPEG, or PNG file');
+        addToast({
+          type: 'error',
+          title: 'Invalid File Type',
+          message: 'Please upload a JPG, JPEG, or PNG file'
+        });
         return;
       }
 
       if (file.size > 5 * 1024 * 1024) {
-        alert('Image must be less than 5MB');
+        addToast({
+          type: 'error',
+          title: 'File Too Large',
+          message: 'Image must be less than 5MB'
+        });
         return;
       }
 
@@ -239,7 +247,11 @@ export default function WorkersList() {
       setShowAddWorker(false);
     } catch (error) {
       console.error('Error adding worker:', error);
-      alert(error instanceof Error ? error.message : 'Failed to add worker');
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Failed to add worker'
+      });
     } finally {
       setIsUploading(false);
     }

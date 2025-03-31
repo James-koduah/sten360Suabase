@@ -1,15 +1,22 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Plus, Search, Edit2, Trash2, Package, ChevronDown } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, ChevronDown, FolderTree } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
 import { Product } from '../../types/inventory';
 import { CURRENCIES } from '../../utils/constants';
 import CreateProductForm from './CreateProductForm';
-import CreateCategoryForm from './CreateCategoryForm';
+import { Link } from 'react-router-dom';
+
+interface Category {
+  id: number;
+  name: string;
+  organization_id: string;
+}
 
 export default function ProductsList() {
   const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -21,24 +28,18 @@ export default function ProductsList() {
   const { confirm, addToast } = useUI();
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : '';
 
-  // Extract unique categories from products
-  const allCategories = useMemo(() => {
-    const categories = new Set<string>();
-    products.forEach(product => categories.add(product.category));
-    return Array.from(categories).sort();
-  }, [products]);
-
   // Filter categories based on search
   const filteredCategories = useMemo(() => {
-    if (!categorySearch) return allCategories;
-    return allCategories.filter(category => 
-      category.toLowerCase().includes(categorySearch.toLowerCase())
+    if (!categorySearch) return categories;
+    return categories.filter(category => 
+      category.name.toLowerCase().includes(categorySearch.toLowerCase())
     );
-  }, [allCategories, categorySearch]);
+  }, [categories, categorySearch]);
 
   useEffect(() => {
     if (!organization) return;
     loadProducts();
+    loadCategories();
   }, [organization]);
 
   const loadProducts = async () => {
@@ -62,6 +63,28 @@ export default function ProductsList() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const loadCategories = async () => {
+    if (!organization?.id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('organization_id', organization.id)
+        .order('name');
+
+      if (error) throw error;
+      setCategories(data || []);
+    } catch (error) {
+      console.error('Error loading categories:', error);
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to load categories'
+      });
     }
   };
 
@@ -106,32 +129,6 @@ export default function ProductsList() {
      product.description?.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
-  const loadCategories = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('*')
-        .order('name');
-
-      if (error) throw error;
-
-      // Assuming you want to set categories in a state
-      // setCategories(data || []);
-    } catch (error) {
-      console.error('Error loading categories:', error);
-      addToast({
-        type: 'error',
-        title: 'Error',
-        message: 'Failed to load categories'
-      });
-    }
-  };
-
-  // Call loadCategories when the component mounts or when needed
-  useEffect(() => {
-    loadCategories();
-  }, []);
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -155,13 +152,13 @@ export default function ProductsList() {
             <Plus className="h-4 w-4 mr-2" />
             Add Product
           </button>
-          <button
-            onClick={() => setShowAddCategory(true)}
+          <Link
+            to="/dashboard/categories"
             className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors duration-200"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Category
-          </button>
+            <FolderTree className="h-4 w-4 mr-2" />
+            Manage Categories
+          </Link>
         </div>
       </div>
 
@@ -213,15 +210,15 @@ export default function ProductsList() {
                 </div>
                 {filteredCategories.map(category => (
                   <div
-                    key={category}
+                    key={category.id}
                     className="px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 cursor-pointer"
                     onClick={() => {
-                      setCategoryFilter(category);
+                      setCategoryFilter(category.name);
                       setShowCategoryDropdown(false);
                       setCategorySearch('');
                     }}
                   >
-                    {category}
+                    {category.name}
                   </div>
                 ))}
               </div>
@@ -327,20 +324,6 @@ export default function ProductsList() {
               <CreateProductForm
                 onClose={() => setShowAddProduct(false)}
                 onSuccess={loadProducts}
-              />
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showAddCategory && (
-        <div className="fixed inset-0 z-50 overflow-y-auto">
-          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowAddCategory(false)} />
-            <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-2xl">
-              <CreateCategoryForm
-                onClose={() => setShowAddCategory(false)}
-                onSuccess={loadCategories}
               />
             </div>
           </div>

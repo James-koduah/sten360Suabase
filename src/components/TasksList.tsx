@@ -230,7 +230,11 @@ export default function TasksList({ status }: TasksListProps) {
     const needsLateReason = isAfter(today, taskDate);
 
     if (needsLateReason && !newTask.late_reason) {
-      alert('Please provide a reason for adding a task for a past date.');
+      addToast({
+        type: 'error',
+        title: 'Invalid Date',
+        message: 'Please provide a reason for adding a task for a past date.'
+      });
       return;
     }
 

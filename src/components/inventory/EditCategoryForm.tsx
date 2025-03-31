@@ -1,53 +1,65 @@
 import { useState } from 'react';
+import { X } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useUI } from '../../context/UIContext';
-import { useAuthStore } from '../../stores/authStore';
 
-interface CreateCategoryFormProps {
+interface Category {
+  id: string;
+  name: string;
+  product_count: number;
+}
+
+interface EditCategoryFormProps {
+  category: Category;
   onClose: () => void;
   onSuccess: () => void;
 }
 
-export default function CreateCategoryForm({ onClose, onSuccess }: CreateCategoryFormProps) {
-  const [categoryName, setCategoryName] = useState('');
+export default function EditCategoryForm({ category, onClose, onSuccess }: EditCategoryFormProps) {
+  const [categoryName, setCategoryName] = useState(category.name);
   const { addToast } = useUI();
-  const { organization } = useAuthStore();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!organization?.id) return;
 
     try {
       const { error } = await supabase
         .from('categories')
-        .insert([{ 
-          name: categoryName,
-          organization_id: organization.id 
-        }]);
+        .update({ name: categoryName })
+        .eq('id', category.id);
 
       if (error) throw error;
 
       addToast({
         type: 'success',
-        title: 'Category Created',
-        message: 'The category has been created successfully.'
+        title: 'Category Updated',
+        message: 'The category has been updated successfully.'
       });
 
       onSuccess();
       onClose();
     } catch (error) {
-      console.error('Error creating category:', error);
+      console.error('Error updating category:', error);
       addToast({
         type: 'error',
         title: 'Error',
-        message: 'Failed to create category'
+        message: 'Failed to update category'
       });
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="p-6">
-      <h2 className="text-lg font-bold mb-4">Create New Category</h2>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-lg font-bold">Edit Category</h2>
+        <button
+          type="button"
+          onClick={onClose}
+          className="text-gray-400 hover:text-gray-500"
+        >
+          <X className="h-5 w-5" />
+        </button>
+      </div>
       <div className="mb-4">
         <label className="block text-sm font-medium text-gray-700">Category Name</label>
         <input
@@ -70,7 +82,7 @@ export default function CreateCategoryForm({ onClose, onSuccess }: CreateCategor
           type="submit"
           className="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
         >
-          Create
+          Update
         </button>
       </div>
     </form>

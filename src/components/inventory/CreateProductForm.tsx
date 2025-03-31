@@ -13,8 +13,6 @@ export default function CreateProductForm({ onClose, onSuccess }: CreateProductF
   const { organization } = useAuthStore();
   const { addToast } = useUI();
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showCustomCategory, setShowCustomCategory] = useState(false);
-  const [customCategory, setCustomCategory] = useState('');
   const [existingCategories, setExistingCategories] = useState<string[]>([]);
   const [formData, setFormData] = useState({
     name: '',
@@ -37,6 +35,7 @@ export default function CreateProductForm({ onClose, onSuccess }: CreateProductF
       const { data, error } = await supabase
         .from('categories')
         .select('name')
+        .eq('organization_id', organization.id)
         .order('name');
 
       if (error) throw error;
@@ -44,6 +43,11 @@ export default function CreateProductForm({ onClose, onSuccess }: CreateProductF
       setExistingCategories(data?.map(category => category.name) || []);
     } catch (error) {
       console.error('Error loading categories:', error);
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to load categories'
+      });
     }
   };
 
@@ -125,24 +129,6 @@ export default function CreateProductForm({ onClose, onSuccess }: CreateProductF
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const handleCategoryChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const value = e.target.value;
-    if (value === 'custom') {
-      setShowCustomCategory(true);
-      setFormData(prev => ({ ...prev, category: '' }));
-    } else {
-      setShowCustomCategory(false);
-      setCustomCategory('');
-      setFormData(prev => ({ ...prev, category: value }));
-    }
-  };
-
-  const handleCustomCategoryChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setCustomCategory(value);
-    setFormData(prev => ({ ...prev, category: value }));
   };
 
   return (

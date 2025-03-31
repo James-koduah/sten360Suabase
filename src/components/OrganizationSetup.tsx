@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import { Building2 } from 'lucide-react';
+import { useUI } from '../context/UIContext';
 
 const EMPLOYEE_RANGES = [
   { label: '0-15 employees', value: 15 },
@@ -36,6 +37,7 @@ export default function OrganizationSetup() {
   const navigate = useNavigate();
   const { organization } = useAuthStore();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { addToast } = useUI();
   const [formData, setFormData] = useState({
     country: organization?.country || '',
     city: organization?.city || '',
@@ -75,7 +77,11 @@ export default function OrganizationSetup() {
       navigate('/dashboard');
     } catch (error) {
       console.error('Error updating organization:', error);
-      alert('Failed to update organization. Please try again.');
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to update organization. Please try again.'
+      });
     } finally {
       setIsSubmitting(false);
     }

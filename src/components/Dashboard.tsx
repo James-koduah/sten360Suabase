@@ -1,7 +1,7 @@
 import React from 'react';
 import { Routes, Route, Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
-import { Building2, Users, ClipboardList, Settings as SettingsIcon, LogOut, UserSquare2, Package, ShoppingCart, DollarSign } from 'lucide-react';
+import { Building2, Users, ClipboardList, Settings as SettingsIcon, LogOut, UserSquare2, Package, ShoppingCart, DollarSign, FolderTree } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 import OrderDetails from './orders/OrderDetails';
 import OrdersList from './orders/OrdersList';
@@ -16,6 +16,7 @@ import ServicesList from './services/ServicesList';
 import ProductsList from './inventory/ProductsList';
 import SalesOrdersList from './inventory/SalesOrdersList';
 import SalesOrderDetails from './inventory/SalesOrderDetails';
+import Categories from '../pages/Categories';
 
 export default function Dashboard() {
   const { user, organization } = useAuthStore();
@@ -117,6 +118,7 @@ export default function Dashboard() {
           <Route path="tasks/delayed" element={<TasksList status="delayed" />} />
           <Route path="tasks/completed" element={<TasksList status="completed" />} />
           <Route path="inventory" element={<ProductsList />} />
+          <Route path="categories" element={<Categories />} />
           <Route path="sales" element={<SalesOrdersList />} />
           <Route path="sales/:id" element={<SalesOrderDetails />} />
           <Route path="finances" element={<FinancialDashboard />} />

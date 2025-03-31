@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
-import { ShoppingCart, DollarSign, Package } from 'lucide-react';
+import { ShoppingCart, DollarSign, Package, CheckCircle, Clock } from 'lucide-react';
 import { CURRENCIES } from '../utils/constants';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface Stats {
   activeOrders: number;
-  salesToday: number;
   revenueToday: number;
+  outstandingAmount: number;
+  completedTasksToday: number;
+  completedOrdersToday: number;
 }
 
 interface DailyRevenue {
@@ -21,12 +23,31 @@ export default function DashboardOverview() {
   const { organization } = useAuthStore();
   const [stats, setStats] = useState<Stats>({
     activeOrders: 0,
-    salesToday: 0,
-    revenueToday: 0
+    revenueToday: 0,
+    outstandingAmount: 0,
+    completedTasksToday: 0,
+    completedOrdersToday: 0
   });
   const [dailyRevenue, setDailyRevenue] = useState<DailyRevenue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [screenWidth, setScreenWidth] = useState(window.innerWidth);
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : '$';
+
+  useEffect(() => {
+    const handleResize = () => {
+      setScreenWidth(window.innerWidth);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Calculate interval based on screen width
+  const getXAxisInterval = () => {
+    if (screenWidth > 900) return 0; // Show all dates
+    if (screenWidth > 600) return 3; // Show every 4th date
+    return 4; // Show every 5th date
+  };
 
   useEffect(() => {
     const loadStats = async () => {
@@ -46,38 +67,61 @@ export default function DashboardOverview() {
           .eq('organization_id', organization.id)
           .not('status', 'eq', 'completed');
 
-        // Get historical data for the past 30 days including today
-        const { data: historicalSalesData } = await supabase
-          .from('sales_orders')
-          .select('total_amount, outstanding_balance, created_at')
-          .eq('organization_id', organization.id)
-          .gte('created_at', thirtyDaysAgoStr)
-          .lte('created_at', today + 'T23:59:59');
-
-        const { data: historicalOrdersData } = await supabase
+        // Get all outstanding amounts
+        const { data: outstandingOrders } = await supabase
           .from('orders')
-          .select('total_amount, outstanding_balance, created_at')
+          .select('outstanding_balance')
+          .eq('organization_id', organization.id);
+
+        const { data: outstandingSales } = await supabase
+          .from('sales_orders')
+          .select('outstanding_balance')
+          .eq('organization_id', organization.id);
+
+        const totalOutstandingAmount = 
+          (outstandingOrders?.reduce((sum, order) => sum + (order.outstanding_balance || 0), 0) || 0) +
+          (outstandingSales?.reduce((sum, sale) => sum + (sale.outstanding_balance || 0), 0) || 0);
+
+        // Get payments for sales orders today
+        const { data: salesPaymentsToday } = await supabase
+          .from('payments')
+          .select('amount')
           .eq('organization_id', organization.id)
-          .gte('created_at', thirtyDaysAgoStr)
-          .lte('created_at', today + 'T23:59:59');
+          .gte('created_at', today)
+          .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
 
-        const salesToday = historicalSalesData?.filter(sale => sale.created_at.startsWith(today)).length || 0;
-        
-        // Calculate total revenue from sales_orders
-        const salesRevenue = historicalSalesData?.filter(sale => sale.created_at.startsWith(today))
-          .reduce((sum, sale) => {
-            const paidAmount = (sale.total_amount || 0) - (sale.outstanding_balance || 0);
-            return sum + paidAmount;
-          }, 0) || 0;
+        const salesRevenueToday = salesPaymentsToday?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
 
-        // Calculate total revenue from orders
-        const ordersRevenue = historicalOrdersData?.filter(order => order.created_at.startsWith(today))
-          .reduce((sum, order) => {
-            const paidAmount = (order.total_amount || 0) - (order.outstanding_balance || 0);
-            return sum + paidAmount;
-          }, 0) || 0;
+        // Get service payments for orders today
+        const { data: servicePaymentsToday } = await supabase
+          .from('service_payments')
+          .select('amount')
+          .eq('organization_id', organization.id)
+          .gte('created_at', today)
+          .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
 
-        const revenueToday = salesRevenue + ordersRevenue;
+        const serviceRevenueToday = servicePaymentsToday?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+
+        const revenueToday = salesRevenueToday + serviceRevenueToday;
+
+        // Get completed tasks today
+        const { count: completedTasksTodayCount } = await supabase
+          .from('tasks')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', organization.id)
+          .eq('status', 'completed')
+          .gte('completed_at', today)
+          .lt('completed_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
+
+        // Get completed orders today
+        const { count: completedOrdersTodayCount } = await supabase
+          .from('orders')
+          .select('*', { count: 'exact', head: true })
+          .eq('organization_id', organization.id)
+          .eq('status', 'completed')
+          .gte('updated_at', today)
+          .lt('updated_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString())
+          .not('created_at', 'eq', 'updated_at');
 
         // Process historical data for the chart
         const revenueByDate = new Map<string, number>();
@@ -90,19 +134,33 @@ export default function DashboardOverview() {
           const dateStr = date.toISOString().split('T')[0];
           revenueByDate.set(dateStr, 0);
         }
+
+        // Get historical sales payments
+        const { data: historicalSalesPayments } = await supabase
+          .from('payments')
+          .select('amount, created_at')
+          .eq('organization_id', organization.id)
+          .gte('created_at', thirtyDaysAgoStr)
+          .lte('created_at', today + 'T23:59:59');
+
+        // Get historical service payments
+        const { data: historicalServicePayments } = await supabase
+          .from('service_payments')
+          .select('amount, created_at')
+          .eq('organization_id', organization.id)
+          .gte('created_at', thirtyDaysAgoStr)
+          .lte('created_at', today + 'T23:59:59');
         
-        // Process sales orders
-        historicalSalesData?.forEach(sale => {
-          const date = sale.created_at.split('T')[0];
-          const paidAmount = (sale.total_amount || 0) - (sale.outstanding_balance || 0);
-          revenueByDate.set(date, (revenueByDate.get(date) || 0) + paidAmount);
+        // Process sales payments
+        historicalSalesPayments?.forEach(payment => {
+          const date = payment.created_at.split('T')[0];
+          revenueByDate.set(date, (revenueByDate.get(date) || 0) + (payment.amount || 0));
         });
 
-        // Process orders
-        historicalOrdersData?.forEach(order => {
-          const date = order.created_at.split('T')[0];
-          const paidAmount = (order.total_amount || 0) - (order.outstanding_balance || 0);
-          revenueByDate.set(date, (revenueByDate.get(date) || 0) + paidAmount);
+        // Process service payments
+        historicalServicePayments?.forEach(payment => {
+          const date = payment.created_at.split('T')[0];
+          revenueByDate.set(date, (revenueByDate.get(date) || 0) + (payment.amount || 0));
         });
 
         // Convert to array and sort by date
@@ -112,8 +170,10 @@ export default function DashboardOverview() {
 
         setStats({
           activeOrders: activeOrdersCount || 0,
-          salesToday,
-          revenueToday
+          revenueToday,
+          outstandingAmount: totalOutstandingAmount,
+          completedTasksToday: completedTasksTodayCount || 0,
+          completedOrdersToday: completedOrdersTodayCount || 0
         });
         setDailyRevenue(dailyRevenueData);
       } catch (error) {
@@ -153,20 +213,36 @@ export default function DashboardOverview() {
       link: '/dashboard/orders'
     },
     {
-      name: 'Sales Today',
-      value: stats.salesToday,
-      icon: Package,
-      color: 'text-green-600',
-      bg: 'bg-green-100',
-      link: '/dashboard/sales'
-    },
-    {
       name: 'Revenue Today',
       value: `${currencySymbol} ${stats.revenueToday.toFixed(2)}`,
       icon: DollarSign,
       color: 'text-purple-600',
       bg: 'bg-purple-100',
       link: '/dashboard/revenue'
+    },
+    {
+      name: 'Amount Owed By Clients',
+      value: `${currencySymbol} ${stats.outstandingAmount.toFixed(2)}`,
+      icon: DollarSign,
+      color: 'text-red-600',
+      bg: 'bg-red-100',
+      link: '/dashboard/revenue'
+    },
+    {
+      name: 'Completed Tasks Today',
+      value: stats.completedTasksToday,
+      icon: CheckCircle,
+      color: 'text-emerald-600',
+      bg: 'bg-emerald-100',
+      link: '/dashboard/tasks'
+    },
+    {
+      name: 'Completed Orders Today',
+      value: stats.completedOrdersToday,
+      icon: CheckCircle,
+      color: 'text-teal-600',
+      bg: 'bg-teal-100',
+      link: '/dashboard/orders'
     }
   ];
 
@@ -198,15 +274,18 @@ export default function DashboardOverview() {
 
       <div className="bg-white shadow rounded-lg">
         <div className="px-4 py-5 sm:p-6">
-          <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Revenue Over Time</h3>
-          <div className="h-80">
+          <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Revenue Over The Past 30 days</h3>
+          <div className="h-[300px] sm:h-[400px] lg:h-[500px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={dailyRevenue}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="date" 
-                  tickFormatter={(date: string) => new Date(date).toLocaleDateString()}
-                  interval={0}
+                  tickFormatter={(date: string) => {
+                    const d = new Date(date);
+                    return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
+                  }}
+                  interval={getXAxisInterval()}
                   angle={-45}
                   textAnchor="end"
                   height={80}
@@ -215,10 +294,15 @@ export default function DashboardOverview() {
                 <YAxis 
                   tickFormatter={(value: number) => `${currencySymbol}${value.toFixed(0)}`}
                   tick={{ fontSize: 12 }}
+                  width={80}
                 />
                 <Tooltip 
                   formatter={(value: number) => [`${currencySymbol}${value.toFixed(2)}`, 'Revenue']}
-                  labelFormatter={(date: string) => new Date(date).toLocaleDateString()}
+                  labelFormatter={(date: string) => {
+                    const d = new Date(date);
+                    return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
+                  }}
+                  contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}
                 />
                 <Bar 
                   dataKey="revenue" 
