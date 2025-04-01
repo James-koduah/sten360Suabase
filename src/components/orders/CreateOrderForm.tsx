@@ -4,7 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
 import { CURRENCIES } from '../../utils/constants';
 import { format } from 'date-fns';
-import { Plus, Minus, X, User, FileText, Calendar, CreditCard, DollarSign } from 'lucide-react';
+import { Plus, Minus, X, User, FileText, Calendar, CreditCard, DollarSign, Printer } from 'lucide-react';
 
 interface Client {
   id: string;
@@ -38,6 +38,219 @@ interface CreateOrderFormProps {
   onSuccess: () => void;
 }
 
+interface OrderSummaryProps {
+  orderData: any;
+  selectedClient: Client;
+  selectedServices: OrderService[];
+  selectedWorkers: { worker_id: string; project_id: string }[];
+  formData: any;
+  currencySymbol: string;
+  onClose: () => void;
+  workers: Worker[];
+  workerProjects: {[key: string]: any[]};
+}
+
+function OrderSummary({ orderData, selectedClient, selectedServices, selectedWorkers, formData, currencySymbol, onClose, workers, workerProjects }: OrderSummaryProps) {
+  const totalAmount = selectedServices.reduce(
+    (sum, { service, quantity }) => sum + (service.cost * quantity),
+    0
+  );
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  return (
+    <div className="bg-white rounded-lg shadow-xl max-w-[57mm] w-full mx-auto overflow-y-auto max-h-[90vh] border border-gray-100">
+      <div className="px-4 py-6">
+        <div className="flex items-center justify-between mb-4">
+          <button
+            onClick={handlePrint}
+            className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print
+          </button>
+          <button
+            onClick={onClose}
+            className="p-2 text-gray-400 hover:text-gray-500 hover:bg-white rounded-full transition-colors duration-200"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="print:block hidden">
+          <style>
+            {`
+              @media print {
+                @page {
+                  size: 57mm 50mm;
+                  margin: 0;
+                }
+                body {
+                  width: 57mm;
+                  margin: 0;
+                  padding: 0;
+                  font-family: monospace;
+                  font-size: 7pt;
+                  line-height: 1.2;
+                }
+                .no-print {
+                  display: none !important;
+                }
+                .receipt-content {
+                  padding: 1mm;
+                }
+                .receipt-header {
+                  text-align: center;
+                  margin-bottom: 1mm;
+                  padding-bottom: 1mm;
+                  border-bottom: 1px solid #000;
+                }
+                .receipt-title {
+                  font-size: 12pt;
+                  font-weight: bold;
+                  letter-spacing: 0.5pt;
+                }
+                .receipt-divider {
+                  border-top: 1px solid #000;
+                  margin: 0.5mm 0;
+                }
+                .receipt-row {
+                  display: flex;
+                  justify-content: space-between;
+                  margin: 0.3mm 0;
+                  white-space: nowrap;
+                  overflow: hidden;
+                  text-overflow: ellipsis;
+                }
+                .receipt-label {
+                  font-weight: bold;
+                  margin-right: 1mm;
+                }
+                .receipt-value {
+                  text-align: right;
+                }
+                .receipt-total {
+                  font-weight: bold;
+                  font-size: 8pt;
+                  margin-top: 0.5mm;
+                }
+                .receipt-service {
+                  margin: 0.2mm 0;
+                }
+                .receipt-service-name {
+                  margin-right: 1mm;
+                }
+                .receipt-service-quantity {
+                  color: #666;
+                }
+                .receipt-footer {
+                  text-align: center;
+                  margin-top: 1mm;
+                  padding-top: 1mm;
+                  border-top: 1px solid #000;
+                  font-size: 6pt;
+                  color: #666;
+                }
+              }
+            `}
+          </style>
+        </div>
+
+        <div className="receipt-content">
+          {/* Organization Name */}
+          <div className="receipt-header">
+            <div className="receipt-title">STEN360</div>
+          </div>
+
+          {/* Order Number */}
+          <div className="receipt-row">
+            <span className="receipt-label">Order #:</span>
+            <span className="receipt-value">{orderData.order_number}</span>
+          </div>
+
+          {/* Description (if exists) */}
+          {formData.description && (
+            <div className="receipt-row">
+              <span className="receipt-label">Desc:</span>
+              <span className="receipt-value">{formData.description}</span>
+            </div>
+          )}
+
+          {/* Due Date */}
+          <div className="receipt-row">
+            <span className="receipt-label">Due:</span>
+            <span className="receipt-value">
+              {formData.due_date ? format(new Date(formData.due_date), 'dd/MM/yyyy') : 'N/A'}
+            </span>
+          </div>
+
+          <div className="receipt-divider" />
+
+          {/* Services */}
+          {selectedServices.map(({ service, quantity }) => (
+            <div key={service.id} className="receipt-service">
+              <div className="receipt-row">
+                <span className="receipt-service-name">{service.name}</span>
+                <span className="receipt-service-quantity">x{quantity}</span>
+              </div>
+              <div className="receipt-row">
+                <span className="receipt-value">{currencySymbol} {(service.cost * quantity).toFixed(2)}</span>
+              </div>
+            </div>
+          ))}
+
+          <div className="receipt-divider" />
+
+          {/* Payment Information */}
+          {formData.initial_payment > 0 && (
+            <>
+              <div className="receipt-row">
+                <span className="receipt-label">Payment:</span>
+                <span className="receipt-value">{currencySymbol} {formData.initial_payment.toFixed(2)}</span>
+              </div>
+              <div className="receipt-row">
+                <span className="receipt-label">Method:</span>
+                <span className="receipt-value">
+                  {formData.payment_method.charAt(0).toUpperCase() + formData.payment_method.slice(1).replace('_', ' ')}
+                </span>
+              </div>
+            </>
+          )}
+
+          {/* Total Amount */}
+          <div className="receipt-row receipt-total">
+            <span>Total:</span>
+            <span className="receipt-value">{currencySymbol} {totalAmount.toFixed(2)}</span>
+          </div>
+
+          {/* Outstanding Balance */}
+          {formData.initial_payment > 0 && (
+            <div className="receipt-row receipt-total">
+              <span>Balance:</span>
+              <span className="receipt-value">{currencySymbol} {(totalAmount - formData.initial_payment).toFixed(2)}</span>
+            </div>
+          )}
+
+          <div className="receipt-divider" />
+
+          {/* Client Name */}
+          <div className="receipt-row">
+            <span className="receipt-label">Client:</span>
+            <span className="receipt-value">{selectedClient.name}</span>
+          </div>
+
+          {/* Footer */}
+          <div className="receipt-footer">
+            Thank you for your business!
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormProps) {
   const [clients, setClients] = useState<Client[]>([]);
   const [workers, setWorkers] = useState<Worker[]>([]);
@@ -58,6 +271,8 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
     initial_payment: 0,
     payment_method: ''
   });
+  const [showOrderSummary, setShowOrderSummary] = useState(false);
+  const [createdOrder, setCreatedOrder] = useState<any>(null);
 
   const { organization } = useAuthStore();
   const { addToast } = useUI();
@@ -213,6 +428,9 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
         if (paymentError) throw paymentError;
       }
 
+      setCreatedOrder(orderData);
+      setShowOrderSummary(true);
+      
       addToast({
         type: 'success',
         title: 'Order Created',
@@ -220,7 +438,6 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
       });
 
       onSuccess();
-      onClose();
     } catch (error) {
       console.error('Error creating order:', error);
       addToast({
@@ -265,6 +482,25 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
     (sum, { service, quantity }) => sum + (service.cost * quantity),
     0
   );
+
+  if (showOrderSummary && createdOrder) {
+    return (
+      <OrderSummary
+        orderData={createdOrder}
+        selectedClient={selectedClient!}
+        selectedServices={selectedServices}
+        selectedWorkers={selectedWorkers}
+        formData={formData}
+        currencySymbol={currencySymbol}
+        onClose={() => {
+          setShowOrderSummary(false);
+          onClose();
+        }}
+        workers={workers}
+        workerProjects={workerProjects}
+      />
+    );
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-auto overflow-y-auto max-h-[90vh] border border-gray-100">

@@ -6,19 +6,26 @@ import { CURRENCIES } from '../utils/constants';
 import { Link } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
+// Helper function to format numbers with commas
+const formatNumber = (num: number) => {
+  return num.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  });
+};
+
 interface Stats {
   activeOrders: number;
   revenueToday: number;
   outstandingAmount: number;
-  completedTasksToday: number;
-  completedOrdersToday: number;
+  sixMonthRevenue: number;
 }
 
 interface DailyRevenue {
   date: string;
   total: number;
   sales: number;
-  services: number;
+  service: number;
 }
 
 export default function DashboardOverview() {
@@ -27,8 +34,7 @@ export default function DashboardOverview() {
     activeOrders: 0,
     revenueToday: 0,
     outstandingAmount: 0,
-    completedTasksToday: 0,
-    completedOrdersToday: 0
+    sixMonthRevenue: 0
   });
   const [dailyRevenue, setDailyRevenue] = useState<DailyRevenue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,41 +98,24 @@ export default function DashboardOverview() {
           .gte('created_at', today)
           .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
 
-        const salesRevenueToday = salesPaymentsToday?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
+        const revenueToday = salesPaymentsToday?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
 
-        // Get service payments for orders today
-        const { data: servicePaymentsToday } = await supabase
-          .from('service_payments')
+        // Get 6-month revenue
+        const sixMonthsAgo = new Date();
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+        const sixMonthsAgoStr = sixMonthsAgo.toISOString().split('T')[0];
+
+        const { data: sixMonthPayments } = await supabase
+          .from('payments')
           .select('amount')
           .eq('organization_id', organization.id)
-          .gte('created_at', today)
-          .lt('created_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
+          .gte('created_at', sixMonthsAgoStr)
+          .lte('created_at', today + 'T23:59:59');
 
-        const serviceRevenueToday = servicePaymentsToday?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
-
-        const revenueToday = salesRevenueToday + serviceRevenueToday;
-
-        // Get completed tasks today
-        const { count: completedTasksTodayCount } = await supabase
-          .from('tasks')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organization.id)
-          .eq('status', 'completed')
-          .gte('completed_at', today)
-          .lt('completed_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString());
-
-        // Get completed orders today
-        const { count: completedOrdersTodayCount } = await supabase
-          .from('orders')
-          .select('*', { count: 'exact', head: true })
-          .eq('organization_id', organization.id)
-          .eq('status', 'completed')
-          .gte('updated_at', today)
-          .lt('updated_at', new Date(new Date(today).getTime() + 24 * 60 * 60 * 1000).toISOString())
-          .not('created_at', 'eq', 'updated_at');
+        const sixMonthRevenue = sixMonthPayments?.reduce((sum, payment) => sum + (payment.amount || 0), 0) || 0;
 
         // Process historical data for the chart
-        const revenueByDate = new Map<string, { total: number; sales: number; services: number }>();
+        const revenueByDate = new Map<string, { total: number; sales: number; service: number }>();
         
         // Initialize all dates in the range with 0
         const currentDate = new Date();
@@ -134,54 +123,39 @@ export default function DashboardOverview() {
           const date = new Date(currentDate);
           date.setDate(date.getDate() - i);
           const dateStr = date.toISOString().split('T')[0];
-          revenueByDate.set(dateStr, { total: 0, sales: 0, services: 0 });
+          revenueByDate.set(dateStr, { total: 0, sales: 0, service: 0 });
         }
 
-        // Get historical sales payments
-        const { data: historicalSalesPayments } = await supabase
+        // Get historical payments
+        const { data: historicalPayments } = await supabase
           .from('payments')
-          .select('amount, created_at')
+          .select('amount, created_at, reference_type')
           .eq('organization_id', organization.id)
-          .eq('reference_type', 'sales_order')
-          .gte('created_at', thirtyDaysAgoStr)
-          .lte('created_at', today + 'T23:59:59');
-
-        // Get historical service payments
-        const { data: historicalServicePayments } = await supabase
-          .from('payments')
-          .select('amount, created_at')
-          .eq('organization_id', organization.id)
-          .eq('reference_type', 'service_order')
           .gte('created_at', thirtyDaysAgoStr)
           .lte('created_at', today + 'T23:59:59');
         
-        // Process sales payments
-        historicalSalesPayments?.forEach(payment => {
+        // Process payments
+        historicalPayments?.forEach(payment => {
           const date = payment.created_at.split('T')[0];
-          const current = revenueByDate.get(date) || { total: 0, sales: 0, services: 0 };
+          const current = revenueByDate.get(date) || { total: 0, sales: 0, service: 0 };
           const amount = payment.amount || 0;
-          current.sales += amount;
-          current.total += amount;
-          revenueByDate.set(date, current);
-        });
-
-        // Process service payments
-        historicalServicePayments?.forEach(payment => {
-          const date = payment.created_at.split('T')[0];
-          const current = revenueByDate.get(date) || { total: 0, sales: 0, services: 0 };
-          const amount = payment.amount || 0;
-          current.services += amount;
+          
+          if (payment.reference_type === 'sales_order') {
+            current.sales += amount;
+          } else if (payment.reference_type === 'service_order') {
+            current.service += amount;
+          }
           current.total += amount;
           revenueByDate.set(date, current);
         });
 
         // Convert to array and sort by date
-        const dailyRevenueData = Array.from(revenueByDate.entries())
+        const dailyRevenueData: DailyRevenue[] = Array.from(revenueByDate.entries())
           .map(([date, revenue]) => ({ 
             date, 
             total: revenue.total,
             sales: revenue.sales,
-            services: revenue.services
+            service: revenue.service
           }))
           .sort((a, b) => a.date.localeCompare(b.date));
 
@@ -189,8 +163,7 @@ export default function DashboardOverview() {
           activeOrders: activeOrdersCount || 0,
           revenueToday,
           outstandingAmount: totalOutstandingAmount,
-          completedTasksToday: completedTasksTodayCount || 0,
-          completedOrdersToday: completedOrdersTodayCount || 0
+          sixMonthRevenue
         });
         setDailyRevenue(dailyRevenueData);
       } catch (error) {
@@ -231,7 +204,7 @@ export default function DashboardOverview() {
     },
     {
       name: 'Revenue Today',
-      value: `${currencySymbol} ${stats.revenueToday.toFixed(2)}`,
+      value: `${currencySymbol} ${formatNumber(stats.revenueToday)}`,
       icon: DollarSign,
       color: 'text-purple-600',
       bg: 'bg-purple-100',
@@ -239,27 +212,19 @@ export default function DashboardOverview() {
     },
     {
       name: 'Amount Owed By Clients',
-      value: `${currencySymbol} ${stats.outstandingAmount.toFixed(2)}`,
+      value: `${currencySymbol} ${formatNumber(stats.outstandingAmount)}`,
       icon: DollarSign,
       color: 'text-red-600',
       bg: 'bg-red-100',
       link: '/dashboard/revenue'
     },
     {
-      name: 'Completed Tasks Today',
-      value: stats.completedTasksToday,
-      icon: CheckCircle,
-      color: 'text-emerald-600',
-      bg: 'bg-emerald-100',
-      link: '/dashboard/tasks'
-    },
-    {
-      name: 'Completed Orders Today',
-      value: stats.completedOrdersToday,
-      icon: CheckCircle,
-      color: 'text-teal-600',
-      bg: 'bg-teal-100',
-      link: '/dashboard/orders'
+      name: '6-Month Revenue',
+      value: `${currencySymbol} ${formatNumber(stats.sixMonthRevenue)}`,
+      icon: DollarSign,
+      color: 'text-indigo-600',
+      bg: 'bg-indigo-100',
+      link: '/dashboard/finances'
     }
   ];
 
@@ -309,12 +274,12 @@ export default function DashboardOverview() {
                   tick={{ fontSize: 12 }}
                 />
                 <YAxis 
-                  tickFormatter={(value: number) => `${currencySymbol}${value.toFixed(0)}`}
+                  tickFormatter={(value: number) => `${currencySymbol}${formatNumber(value)}`}
                   tick={{ fontSize: 12 }}
                   width={80}
                 />
                 <Tooltip 
-                  formatter={(value: number, name: string) => [`${currencySymbol}${value.toFixed(2)}`, name]}
+                  formatter={(value: number, name: string) => [`${currencySymbol}${formatNumber(value)}`, name]}
                   labelFormatter={(date: string) => {
                     const d = new Date(date);
                     return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
@@ -336,7 +301,7 @@ export default function DashboardOverview() {
                   radius={[2, 2, 0, 0]}
                 />
                 <Bar 
-                  dataKey="services" 
+                  dataKey="service" 
                   name="Service Orders"
                   fill="#3B82F6"
                   barSize={5}
