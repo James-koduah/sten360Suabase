@@ -66,7 +66,8 @@ export default function SalesOrderDetails() {
 
   const loadOrderDetails = async () => {
     try {
-      const { data, error } = await supabase
+      // First get the order details
+      const { data: orderData, error: orderError } = await supabase
         .from('sales_orders')
         .select(`
           *,
@@ -84,21 +85,27 @@ export default function SalesOrderDetails() {
               name,
               stock_quantity
             )
-          ),
-          payments:payments(
-            id,
-            amount,
-            payment_method,
-            transaction_reference,
-            created_at,
-            recorded_by
           )
         `)
         .eq('id', id)
         .single();
 
-      if (error) throw error;
-      setOrder(data as SalesOrder);
+      if (orderError) throw orderError;
+
+      // Then get the payments
+      const { data: paymentsData, error: paymentsError } = await supabase
+        .from('payments')
+        .select('*')
+        .eq('reference_type', 'sales_order')
+        .eq('reference_id', id);
+
+      if (paymentsError) throw paymentsError;
+
+      // Combine the data
+      setOrder({
+        ...orderData,
+        payments: paymentsData || []
+      } as SalesOrder);
     } catch (error) {
       console.error('Error loading order:', error);
       addToast({

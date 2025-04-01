@@ -52,14 +52,6 @@ export default function SalesOrdersList() {
             total_price,
             is_custom_item,
             product:products(*)
-          ),
-          payments:payments(
-            id,
-            amount,
-            payment_method,
-            transaction_reference,
-            created_at,
-            recorded_by
           )
         `)
         .eq('organization_id', organization.id)
@@ -213,8 +205,8 @@ export default function SalesOrdersList() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Sales Orders</h2>
-          <p className="text-sm text-gray-500 mt-1">Manage your sales orders and payments</p>
+          <h2 className="text-2xl font-bold text-gray-900">Sales</h2>
+          <p className="text-sm text-gray-500 mt-1">Manage your sales and payments</p>
         </div>
         <button
           onClick={() => setShowAddOrder(true)}

@@ -362,17 +362,17 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Create function to record payments
 CREATE OR REPLACE FUNCTION record_payment(
+    p_organization_id UUID,
     p_order_id UUID,
     p_amount NUMERIC,
-    p_payment_method TEXT,
-    p_payment_reference TEXT DEFAULT NULL,
-    p_recorded_by UUID DEFAULT NULL,
-    p_organization_id UUID DEFAULT NULL
-)
-RETURNS JSONB AS $$
+    p_payment_method VARCHAR,
+    p_payment_reference VARCHAR,
+    p_recorded_by UUID
+) RETURNS JSONB AS $$
 DECLARE
-    v_payment_id UUID;
+    v_payment_id INTEGER;
     v_payment JSONB;
     v_is_sales_order BOOLEAN;
     v_order_exists BOOLEAN;
@@ -410,26 +410,29 @@ BEGIN
         SELECT 1 FROM sales_orders WHERE id = p_order_id
     ) INTO v_is_sales_order;
 
-    -- Insert payment record based on order type
-    IF v_is_sales_order THEN
-        -- This is a sales order
-        INSERT INTO payments (
-            sales_order_id,
-            amount,
-            payment_method,
-            transaction_reference,
-            recorded_by
-        )
-        VALUES (
-            p_order_id,
-            p_amount,
-            p_payment_method,
-            p_payment_reference,
-            p_recorded_by
-        )
-        RETURNING id INTO v_payment_id;
+    -- Insert payment record
+    INSERT INTO payments (
+        reference_id,
+        reference_type,
+        organization_id,
+        amount,
+        payment_method,
+        transaction_reference,
+        recorded_by
+    )
+    VALUES (
+        p_order_id,
+        CASE WHEN v_is_sales_order THEN 'sales_order' ELSE 'service_order' END,
+        p_organization_id,
+        p_amount,
+        p_payment_method,
+        p_payment_reference,
+        p_recorded_by
+    )
+    RETURNING id INTO v_payment_id;
 
-        -- Update outstanding balance in sales_orders
+    -- Update outstanding balance based on order type
+    IF v_is_sales_order THEN
         UPDATE sales_orders
         SET 
             outstanding_balance = GREATEST(0, outstanding_balance - p_amount),
@@ -438,38 +441,7 @@ BEGIN
                 ELSE 'partially_paid'
             END
         WHERE id = p_order_id;
-
-        -- Get payment details
-        SELECT jsonb_build_object(
-            'id', p.id,
-            'sales_order_id', p.sales_order_id,
-            'amount', p.amount,
-            'payment_method', p.payment_method,
-            'transaction_reference', p.transaction_reference,
-            'recorded_by', p.recorded_by,
-            'created_at', p.created_at
-        ) INTO v_payment
-        FROM payments p
-        WHERE p.id = v_payment_id;
     ELSE
-        -- This is a regular service order
-        INSERT INTO service_payments (
-            organization_id,
-            order_id,
-            amount,
-            payment_method,
-            payment_reference
-        )
-        VALUES (
-            p_organization_id,
-            p_order_id,
-            p_amount,
-            p_payment_method,
-            p_payment_reference
-        )
-        RETURNING id INTO v_payment_id;
-
-        -- Update outstanding balance in orders
         UPDATE orders
         SET 
             outstanding_balance = GREATEST(0, outstanding_balance - p_amount),
@@ -478,20 +450,22 @@ BEGIN
                 ELSE 'partially_paid'
             END
         WHERE id = p_order_id;
-
-        -- Get payment details
-        SELECT jsonb_build_object(
-            'id', p.id,
-            'order_id', p.order_id,
-            'organization_id', p.organization_id,
-            'amount', p.amount,
-            'payment_method', p.payment_method,
-            'payment_reference', p.payment_reference,
-            'created_at', p.created_at
-        ) INTO v_payment
-        FROM service_payments p
-        WHERE p.id = v_payment_id;
     END IF;
+
+    -- Get payment details
+    SELECT jsonb_build_object(
+        'id', p.id,
+        'reference_id', p.reference_id,
+        'reference_type', p.reference_type,
+        'organization_id', p.organization_id,
+        'amount', p.amount,
+        'payment_method', p.payment_method,
+        'transaction_reference', p.transaction_reference,
+        'recorded_by', p.recorded_by,
+        'created_at', p.created_at
+    ) INTO v_payment
+    FROM payments p
+    WHERE p.id = v_payment_id;
 
     RETURN v_payment;
 EXCEPTION
@@ -499,45 +473,4 @@ EXCEPTION
         -- Rollback any changes if there's an error
         RAISE EXCEPTION 'Error recording payment: %', SQLERRM;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
-CREATE OR REPLACE FUNCTION update_sales_order_totals()
-RETURNS TRIGGER AS $$
-DECLARE
-    v_total numeric(10,2);
-    v_payments numeric(10,2);
-    v_outstanding numeric(10,2);
-BEGIN
-    -- Calculate total amount from items
-    SELECT COALESCE(SUM(total_price), 0)
-    INTO v_total
-    FROM sales_order_items
-    WHERE sales_order_id = NEW.sales_order_id;
-
-    -- Calculate total payments
-    SELECT COALESCE(SUM(amount), 0)
-    INTO v_payments
-    FROM payments
-    WHERE sales_order_id = NEW.sales_order_id;
-
-    -- Calculate outstanding balance
-    v_outstanding := v_total - v_payments;
-
-    -- Update sales order
-    UPDATE sales_orders
-    SET total_amount = v_total,
-        outstanding_balance = v_outstanding,
-        payment_status = CASE 
-            WHEN v_outstanding <= 0 THEN 'paid'
-            WHEN v_payments > 0 THEN 'partially_paid'
-            ELSE 'unpaid'
-        END,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = NEW.sales_order_id;
-
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
-
-
-
+$$ LANGUAGE plpgsql SECURITY DEFINER; 

@@ -16,7 +16,9 @@ interface Stats {
 
 interface DailyRevenue {
   date: string;
-  revenue: number;
+  total: number;
+  sales: number;
+  services: number;
 }
 
 export default function DashboardOverview() {
@@ -124,7 +126,7 @@ export default function DashboardOverview() {
           .not('created_at', 'eq', 'updated_at');
 
         // Process historical data for the chart
-        const revenueByDate = new Map<string, number>();
+        const revenueByDate = new Map<string, { total: number; sales: number; services: number }>();
         
         // Initialize all dates in the range with 0
         const currentDate = new Date();
@@ -132,7 +134,7 @@ export default function DashboardOverview() {
           const date = new Date(currentDate);
           date.setDate(date.getDate() - i);
           const dateStr = date.toISOString().split('T')[0];
-          revenueByDate.set(dateStr, 0);
+          revenueByDate.set(dateStr, { total: 0, sales: 0, services: 0 });
         }
 
         // Get historical sales payments
@@ -140,32 +142,47 @@ export default function DashboardOverview() {
           .from('payments')
           .select('amount, created_at')
           .eq('organization_id', organization.id)
+          .eq('reference_type', 'sales_order')
           .gte('created_at', thirtyDaysAgoStr)
           .lte('created_at', today + 'T23:59:59');
 
         // Get historical service payments
         const { data: historicalServicePayments } = await supabase
-          .from('service_payments')
+          .from('payments')
           .select('amount, created_at')
           .eq('organization_id', organization.id)
+          .eq('reference_type', 'service_order')
           .gte('created_at', thirtyDaysAgoStr)
           .lte('created_at', today + 'T23:59:59');
         
         // Process sales payments
         historicalSalesPayments?.forEach(payment => {
           const date = payment.created_at.split('T')[0];
-          revenueByDate.set(date, (revenueByDate.get(date) || 0) + (payment.amount || 0));
+          const current = revenueByDate.get(date) || { total: 0, sales: 0, services: 0 };
+          const amount = payment.amount || 0;
+          current.sales += amount;
+          current.total += amount;
+          revenueByDate.set(date, current);
         });
 
         // Process service payments
         historicalServicePayments?.forEach(payment => {
           const date = payment.created_at.split('T')[0];
-          revenueByDate.set(date, (revenueByDate.get(date) || 0) + (payment.amount || 0));
+          const current = revenueByDate.get(date) || { total: 0, sales: 0, services: 0 };
+          const amount = payment.amount || 0;
+          current.services += amount;
+          current.total += amount;
+          revenueByDate.set(date, current);
         });
 
         // Convert to array and sort by date
         const dailyRevenueData = Array.from(revenueByDate.entries())
-          .map(([date, revenue]) => ({ date, revenue }))
+          .map(([date, revenue]) => ({ 
+            date, 
+            total: revenue.total,
+            sales: revenue.sales,
+            services: revenue.services
+          }))
           .sort((a, b) => a.date.localeCompare(b.date));
 
         setStats({
@@ -218,7 +235,7 @@ export default function DashboardOverview() {
       icon: DollarSign,
       color: 'text-purple-600',
       bg: 'bg-purple-100',
-      link: '/dashboard/revenue'
+      link: '/dashboard/finances'
     },
     {
       name: 'Amount Owed By Clients',
@@ -277,7 +294,7 @@ export default function DashboardOverview() {
           <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">Revenue Over The Past 30 days</h3>
           <div className="h-[300px] sm:h-[400px] lg:h-[500px] w-full">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={dailyRevenue}>
+              <BarChart data={dailyRevenue} barGap={0}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis 
                   dataKey="date" 
@@ -297,7 +314,7 @@ export default function DashboardOverview() {
                   width={80}
                 />
                 <Tooltip 
-                  formatter={(value: number) => [`${currencySymbol}${value.toFixed(2)}`, 'Revenue']}
+                  formatter={(value: number, name: string) => [`${currencySymbol}${value.toFixed(2)}`, name]}
                   labelFormatter={(date: string) => {
                     const d = new Date(date);
                     return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear().toString().slice(-2)}`;
@@ -305,8 +322,23 @@ export default function DashboardOverview() {
                   contentStyle={{ backgroundColor: 'white', border: '1px solid #e5e7eb', borderRadius: '0.5rem' }}
                 />
                 <Bar 
-                  dataKey="revenue" 
+                  dataKey="total" 
+                  name="Total Revenue"
                   fill="#8B5CF6"
+                  barSize={5}
+                  radius={[2, 2, 0, 0]}
+                />
+                <Bar 
+                  dataKey="sales" 
+                  name="Sales Orders"
+                  fill="#10B981"
+                  barSize={5}
+                  radius={[2, 2, 0, 0]}
+                />
+                <Bar 
+                  dataKey="services" 
+                  name="Service Orders"
+                  fill="#3B82F6"
                   barSize={5}
                   radius={[2, 2, 0, 0]}
                 />

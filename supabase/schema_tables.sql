@@ -200,20 +200,26 @@ create table public.sales_order_items (
   constraint positive_unit_price check ((unit_price >= (0)::numeric))
 ) TABLESPACE pg_default;
 
+-- Create payments table
+CREATE TABLE payments (
+    id serial not null,
+    reference_id uuid not null,
+    reference_type character varying(50) not null,
+    organization_id uuid null,
+    transaction_reference character varying(255) null,
+    amount numeric(18, 2) not null,
+    currency character varying(20) null,
+    payment_method character varying(50) not null,
+    recorded_by uuid null,
+    created_at timestamp without time zone null default CURRENT_TIMESTAMP,
+    constraint new_payments_pkey primary key (id)
+);
 
-create table public.payments (
-  id uuid not null default extensions.uuid_generate_v4 (),
-  sales_order_id uuid not null,
-  amount numeric(10, 2) not null,
-  payment_method text not null,
-  transaction_reference text null,
-  recorded_by uuid not null,
-  created_at timestamp with time zone not null default now(),
-  constraint payments_pkey primary key (id),
-  constraint payments_recorded_by_fkey foreign KEY (recorded_by) references users (auth_id) on delete CASCADE,
-  constraint payments_sales_order_id_fkey foreign KEY (sales_order_id) references sales_orders (id) on delete CASCADE,
-  constraint positive_payment check ((amount > (0)::numeric))
-) TABLESPACE pg_default;
+-- Add indexes
+CREATE INDEX idx_payments_organization_id ON payments(organization_id);
+CREATE INDEX idx_payments_reference_id ON payments(reference_id);
+CREATE INDEX idx_payments_reference_type ON payments(reference_type);
+CREATE INDEX idx_payments_recorded_by ON payments(recorded_by);
 
 
 
@@ -265,20 +271,6 @@ create table public.order_workers (
   constraint order_workers_order_id_fkey foreign KEY (order_id) references orders (id) on delete CASCADE,
   constraint order_workers_project_id_fkey foreign KEY (project_id) references projects (id) on delete RESTRICT,
   constraint order_workers_worker_id_fkey foreign KEY (worker_id) references workers (id) on delete RESTRICT
-) TABLESPACE pg_default;
-
-create table public.service_payments (
-  id uuid not null default extensions.uuid_generate_v4 (),
-  order_id uuid not null,
-  organization_id uuid not null,
-  amount numeric(10, 2) not null,
-  payment_method text not null,
-  payment_reference text null,
-  created_at timestamp with time zone not null default now(),
-  constraint service_payments_pkey primary key (id),
-  constraint service_payments_order_id_fkey foreign KEY (order_id) references orders (id) on delete CASCADE,
-  constraint service_payments_organization_id_fkey foreign KEY (organization_id) references organizations (id) on delete CASCADE,
-  constraint positive_service_payment check ((amount > (0)::numeric))
 ) TABLESPACE pg_default;
 
 create table public.users_organizations (

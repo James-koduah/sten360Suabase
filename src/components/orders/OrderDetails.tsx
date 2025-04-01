@@ -124,20 +124,19 @@ export default function OrderDetails() {
           custom_fields:order_custom_fields(
             id,
             field:client_custom_fields(title, value)
-          ),
-          payments:service_payments(
-            id,
-            amount,
-            payment_method,
-            payment_reference,
-            created_at
           )
         `)
         .eq('id', id)
         .single();
+        
+      const { data: paymentsData, error: paymentsError } = await supabase
+      .from('payments')
+        .select('*')
+        .eq('reference_type', 'service_order')
+        .eq('reference_id', id);
 
       if (error) throw error;
-      setOrder(data as Order);
+      setOrder({...data, payments: paymentsData || []} as Order);
     } catch (error) {
       console.error('Error loading order:', error);
       addToast({
