@@ -84,7 +84,9 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <nav className="flex items-center justify-center space-x-1 bg-white shadow-sm rounded-lg p-1">
           {navigation.map((item) => {
-            const isActive = location.pathname === item.path;
+            const isActive = location.pathname === item.path || 
+            item.path !== '/dashboard' &&
+              (location.pathname.startsWith(item.path))
             return (
               <Link
                 key={item.name}

@@ -130,9 +130,7 @@ export const RecordPayment = ({ orderId, outstandingBalance, onPaymentRecorded }
                       <span className="text-gray-500 sm:text-sm">$</span>
                     </div>
                     <input
-                      type="number"
-                      step="0.01"
-                      min="0.01"
+                      type="text"
                       max={outstandingBalance}
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}

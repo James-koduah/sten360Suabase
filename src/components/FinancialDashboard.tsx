@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { useUI } from '../context/UIContext';
@@ -31,6 +31,8 @@ import { Link } from 'react-router-dom';
 import DatePicker from 'react-datepicker';
 import "react-datepicker/dist/react-datepicker.css";
 import { CURRENCIES } from '../utils/constants';
+import html2canvas from 'html2canvas';
+import jsPDF from 'jspdf';
 
 interface PaymentMethodStats {
   method: string;
@@ -49,6 +51,7 @@ interface Payment {
   order_details?: {
     order_number: string;
     client_name: string;
+    status?: string;
   };
 }
 
@@ -112,6 +115,7 @@ export default function FinancialDashboard() {
   const { organization } = useAuthStore();
   const { addToast } = useUI();
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : CURRENCIES['USD'].symbol;
+  const dashboardRef = useRef<HTMLDivElement>(null);
 
   const getDateRange = () => {
     if (!startDate || !endDate) {
@@ -137,15 +141,40 @@ export default function FinancialDashboard() {
       // Fetch payment statistics
       const { data: statsData, error: statsError } = await supabase
         .from('payments')
-        .select('payment_method, amount')
+        .select('payment_method, amount, reference_id, reference_type')
         .eq('organization_id', organization.id)
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString());
 
       if (statsError) throw statsError;
 
-      // Calculate payment method statistics
+      // Fetch order statuses for all payments
+      const orderStatuses = await Promise.all(
+        statsData.map(async (payment) => {
+          if (payment.reference_type === 'service_order') {
+            const { data: orderData } = await supabase
+              .from('orders')
+              .select('status')
+              .eq('id', payment.reference_id)
+              .single();
+            return { id: payment.reference_id, status: orderData?.status };
+          }
+          return { id: payment.reference_id, status: null };
+        })
+      );
+
+      // Create a map of order statuses
+      const orderStatusMap = orderStatuses.reduce((acc, { id, status }) => {
+        acc[id] = status;
+        return acc;
+      }, {} as Record<string, string | null>);
+
+      // Calculate payment method statistics (excluding cancelled orders)
       const stats = statsData.reduce((acc: PaymentMethodStats[], payment) => {
+        const orderStatus = orderStatusMap[payment.reference_id];
+        // Skip cancelled orders in statistics
+        if (orderStatus === 'cancelled') return acc;
+
         const existingMethod = acc.find(s => s.method === payment.payment_method);
         if (existingMethod) {
           existingMethod.amount += payment.amount;
@@ -169,7 +198,7 @@ export default function FinancialDashboard() {
         .eq('organization_id', organization.id)
         .gte('created_at', start.toISOString())
         .lte('created_at', end.toISOString())
-        .order('created_at', { ascending: false }); // Most recent payments first
+        .order('created_at', { ascending: false });
 
       if (paymentsError) throw paymentsError;
 
@@ -178,7 +207,8 @@ export default function FinancialDashboard() {
         paymentsData.map(async (payment) => {
           let orderDetails = {
             order_number: 'N/A',
-            client_name: 'N/A'
+            client_name: 'N/A',
+            status: null
           };
 
           if (payment.reference_type === 'sales_order') {
@@ -196,7 +226,8 @@ export default function FinancialDashboard() {
             if (!salesOrderError && salesOrderData) {
               orderDetails = {
                 order_number: salesOrderData.order_number,
-                client_name: salesOrderData.clients?.[0]?.name || 'N/A'
+                client_name: salesOrderData.clients?.[0]?.name || 'N/A',
+                status: null
               };
             }
           } else if (payment.reference_type === 'service_order') {
@@ -204,7 +235,8 @@ export default function FinancialDashboard() {
               .from('orders')
               .select(`
                 order_number,
-                clients:clients(name)
+                clients:clients(name),
+                status
               `)
               .eq('id', payment.reference_id)
               .single();
@@ -212,7 +244,8 @@ export default function FinancialDashboard() {
             if (!orderError && orderData) {
               orderDetails = {
                 order_number: orderData.order_number,
-                client_name: orderData.clients || 'N/A'
+                client_name: orderData.clients || 'N/A',
+                status: orderData.status
               };
             }
           }
@@ -245,12 +278,45 @@ export default function FinancialDashboard() {
     downloadCSV(csvContent, filename);
   };
 
+  const handleExportPDF = async () => {
+    if (!dashboardRef.current) return;
+
+    try {
+      const canvas = await html2canvas(dashboardRef.current, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('landscape', 'mm', 'a4');
+      const imgWidth = 297; // A4 width in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, imgWidth, imgHeight);
+      
+      const dateRange = startDate && endDate 
+        ? `${format(startDate, 'MMM d, yyyy')}-${format(endDate, 'MMM d, yyyy')}`
+        : format(new Date(), 'MMM d, yyyy');
+      
+      pdf.save(`financial-report-${dateRange}.pdf`);
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to generate PDF'
+      });
+    }
+  };
+
   useEffect(() => {
     fetchPaymentData();
   }, [dateRange, organization]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50" ref={dashboardRef}>
       {/* Header Section */}
       <div className="bg-white shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -270,6 +336,13 @@ export default function FinancialDashboard() {
               >
                 <Download className="h-4 w-4 mr-2" />
                 Export CSV
+              </button>
+              <button
+                onClick={handleExportPDF}
+                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                Export PDF
               </button>
               <div className="relative">
                 <DatePicker
@@ -329,7 +402,8 @@ export default function FinancialDashboard() {
                 ))}
               </div>
             </div>
-              <div className="h-64">
+            <div className="p-6">
+              <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
@@ -338,8 +412,8 @@ export default function FinancialDashboard() {
                       nameKey="method"
                       cx="50%"
                       cy="50%"
-                      outerRadius={80}
-                      label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`}
+                      outerRadius={120}
+                      innerRadius={60}
                     >
                       {paymentStats.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
@@ -351,6 +425,7 @@ export default function FinancialDashboard() {
                   </PieChart>
                 </ResponsiveContainer>
               </div>
+            </div>
           </div>
 
           {/* Payment Records Table */}
@@ -378,23 +453,29 @@ export default function FinancialDashboard() {
                 </thead>
                 <tbody className="bg-white divide-y divide-gray-200">
                   {payments.map((payment) => (
-                    <tr key={payment.id} className="hover:bg-gray-50">
+                    <tr key={payment.id} className={`hover:bg-gray-50 ${payment.order_details?.status === 'cancelled' ? 'opacity-75' : ''}`}>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <Link 
                           to={`/dashboard/${payment.reference_type === 'sales_order' ? 'sales' : 'orders'}/${payment.reference_id}`}
-                          className="text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                          className={`${payment.order_details?.status === 'cancelled' ? 'line-through text-gray-400 hover:text-gray-500' : 'text-blue-600 hover:text-blue-800'} hover:underline font-medium`}
                         >
                           {payment.order_details?.order_number || 'N/A'}
                         </Link>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-medium">
-                        {currencySymbol}{payment.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <span className={payment.order_details?.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-900'}>
+                          {currencySymbol}{payment.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                        {payment.payment_method}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className={payment.order_details?.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-900'}>
+                          {payment.payment_method}
+                        </span>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                        {format(new Date(payment.created_at), 'MMM d, yyyy')}
+                      <td className="px-6 py-4 whitespace-nowrap text-sm">
+                        <span className={payment.order_details?.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}>
+                          {format(new Date(payment.created_at), 'MMM d, yyyy')}
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -404,10 +485,13 @@ export default function FinancialDashboard() {
                       Total
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {currencySymbol}{payments.reduce((sum, p) => sum + p.amount, 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}
+                      {currencySymbol}{payments
+                        .filter(p => p.order_details?.status !== 'cancelled')
+                        .reduce((sum, p) => sum + p.amount, 0)
+                        .toLocaleString(undefined, { minimumFractionDigits: 2 })}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-                      {payments.length} transactions
+                      {payments.filter(p => p.order_details?.status !== 'cancelled').length} transactions
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {startDate && endDate 

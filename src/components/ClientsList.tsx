@@ -24,6 +24,7 @@ interface Client {
   total_balance: number;
   orders?: Array<{ outstanding_balance: number }>;
   sales_orders?: Array<{ outstanding_balance: number }>;
+  total_spent?: number;
 }
 
 interface NewCustomField {
@@ -71,22 +72,27 @@ export default function ClientsList() {
         .select(`
           *,
           custom_fields:client_custom_fields(*),
-          orders:orders(outstanding_balance),
-          sales_orders:sales_orders(outstanding_balance)
+          orders:orders(outstanding_balance, total_amount),
+          sales_orders:sales_orders(outstanding_balance, total_amount)
         `)
         .eq('organization_id', organization.id)
         .order('name');
 
       if (clientsError) throw clientsError;
 
-      // Calculate total balance for each client from both orders and sales_orders
+      // Calculate total balance and total spent for each client from both orders and sales_orders
       const clientsWithBalance = clientsData?.map(client => {
         const ordersBalance = client.orders?.reduce((sum: number, order: any) => sum + (order.outstanding_balance || 0), 0) || 0;
         const salesOrdersBalance = client.sales_orders?.reduce((sum: number, order: any) => sum + (order.outstanding_balance || 0), 0) || 0;
         
+        // Calculate total spent from both orders and sales orders
+        const ordersTotalSpent = client.orders?.reduce((sum: number, order: any) => sum + (order.total_amount || 0), 0) || 0;
+        const salesOrdersTotalSpent = client.sales_orders?.reduce((sum: number, order: any) => sum + (order.total_amount || 0), 0) || 0;
+        
         return {
           ...client,
-          total_balance: ordersBalance + salesOrdersBalance
+          total_balance: ordersBalance + salesOrdersBalance,
+          total_spent: ordersTotalSpent + salesOrdersTotalSpent
         };
       }) || [];
 
@@ -382,13 +388,25 @@ export default function ClientsList() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h2 className="text-2xl font-bold text-gray-900">Clients</h2>
-        <button
-          onClick={() => setShowAddClient(true)}
-          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Client
-        </button>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center px-3 py-2 border rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+            <Search className="h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search clients..."
+              className="ml-2 flex-1 outline-none bg-transparent"
+            />
+          </div>
+          <button
+            onClick={() => setShowAddClient(true)}
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Client
+          </button>
+        </div>
       </div>
 
       {showAddClient && (
@@ -555,19 +573,6 @@ export default function ClientsList() {
       )}
 
       <div className="bg-white shadow-sm rounded-lg overflow-hidden">
-        <div className="p-4 border-b">
-          <div className="flex items-center px-3 py-2 border rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
-            <Search className="h-5 w-5 text-gray-400" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search clients..."
-              className="ml-2 flex-1 outline-none bg-transparent"
-            />
-          </div>
-        </div>
-
         <div className="overflow-x-auto">
           {filteredClients.length === 0 ? (
             <div className="text-center text-gray-500 py-8">
@@ -584,16 +589,10 @@ export default function ClientsList() {
                     Contact
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Date of Birth
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Custom Information
+                    Total Spent
                   </th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Balance
-                  </th>
-                  <th scope="col" className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
                   </th>
                 </tr>
               </thead>
@@ -659,145 +658,13 @@ export default function ClientsList() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {editingClient === client.id ? (
-                        <input
-                          type="date"
-                          value={client.date_of_birth || ''}
-                          onChange={(e) => setClients(prev => prev.map(c => 
-                            c.id === client.id ? { ...c, date_of_birth: e.target.value } : c
-                          ))}
-                          className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        />
-                      ) : client.date_of_birth ? (
-                        <div className="text-sm text-gray-500">
-                          <div className="flex items-center">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            {format(new Date(client.date_of_birth), 'MMM d, yyyy')}
-                          </div>
-                        </div>
-                      ) : null}
-                    </td>
-                    <td className="px-6 py-4">
-                      <div className="text-sm text-gray-900">
-                        {client.custom_fields?.map((field, index) => (
-                          <div key={field.id} className="flex items-center justify-between mb-2 bg-gray-50 p-2 rounded">
-                            <div className="flex-1">
-                              <span className="font-medium">{field.title}: </span>
-                              {field.type === 'file' ? (
-                                <a href={field.value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
-                                  View File
-                                </a>
-                              ) : (
-                                <span>{field.value}</span>
-                              )}
-                            </div>
-                            <button
-                              onClick={() => handleDeleteCustomField(client.id, field.id)}
-                              className="ml-2 p-1 text-red-600 hover:text-red-800 rounded-full hover:bg-red-50"
-                            >
-                              <X className="h-4 w-4" />
-                            </button>
-                          </div>
-                        ))}
-                        {editingClient === client.id && (
-                          <div className="mt-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
-                            <h4 className="text-sm font-medium text-gray-900 mb-4">Add Custom Information</h4>
-                            <div className="space-y-4">
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700">Type</label>
-                                <select
-                                  value={newCustomField.type}
-                                  onChange={(e) => setNewCustomField(prev => ({ 
-                                    ...prev, 
-                                    type: e.target.value as 'text' | 'file',
-                                    value: '',
-                                    file: null
-                                  }))}
-                                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                >
-                                  <option value="text">Text</option>
-                                  <option value="file">File</option>
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700">Title</label>
-                                <input
-                                  type="text"
-                                  value={newCustomField.title}
-                                  onChange={(e) => setNewCustomField(prev => ({ ...prev, title: e.target.value }))}
-                                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                  placeholder="Enter field title"
-                                />
-                              </div>
-                              {newCustomField.type === 'text' ? (
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700">Value</label>
-                                  <input
-                                    type="text"
-                                    value={newCustomField.value || ''}
-                                    onChange={(e) => setNewCustomField(prev => ({ ...prev, value: e.target.value }))}
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                                    placeholder="Enter value"
-                                  />
-                                </div>
-                              ) : (
-                                <div>
-                                  <label className="block text-sm font-medium text-gray-700">File</label>
-                                  <div className="mt-1 flex items-center">
-                                    <input
-                                      type="file"
-                                      onChange={(e) => {
-                                        const file = e.target.files?.[0];
-                                        if (file) {
-                                          setNewCustomField(prev => ({ ...prev, file }));
-                                        }
-                                      }}
-                                      className="hidden"
-                                      id={`custom-file-${client.id}`}
-                                    />
-                                    <label
-                                      htmlFor={`custom-file-${client.id}`}
-                                      className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-                                    >
-                                      <Upload className="h-4 w-4 mr-2" />
-                                      Choose File
-                                    </label>
-                                    {newCustomField.file && (
-                                      <span className="ml-3 text-sm text-gray-500">
-                                        {newCustomField.file.name}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              )}
-                              <div className="flex justify-end space-x-3">
-                                <button
-                                  onClick={() => setNewCustomField({ title: '', value: '', type: 'text', file: null })}
-                                  className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900"
-                                >
-                                  Clear
-                                </button>
-                                <button
-                                  onClick={() => {
-                                    if (newCustomField.title && (newCustomField.value || newCustomField.file)) {
-                                      handleAddCustomField(
-                                        client.id, 
-                                        newCustomField.title, 
-                                        newCustomField.value || '', 
-                                        newCustomField.type
-                                      );
-                                      setNewCustomField({ title: '', value: '', type: 'text', file: null });
-                                    }
-                                  }}
-                                  disabled={!newCustomField.title || (!newCustomField.value && !newCustomField.file)}
-                                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
-                                >
-                                  Add Field
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        )}
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-gray-900">
+                          {currencySymbol} {client.total_spent?.toFixed(2) || '0.00'}
+                        </span>
+                        <span className="text-xs text-gray-500 mt-0.5">
+                          All Time
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -808,16 +675,6 @@ export default function ClientsList() {
                         <span className="text-xs text-gray-500 mt-0.5">
                           Total Outstanding
                         </span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <div className="flex justify-end">
-                        <button
-                          onClick={() => handleDeleteClient(client.id)}
-                          className="text-red-600 hover:text-red-900"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
                       </div>
                     </td>
                   </tr>

@@ -144,36 +144,37 @@ export default function ProductsList() {
           <h2 className="text-2xl font-bold text-gray-900">Products</h2>
           <p className="text-sm text-gray-500 mt-1">Manage your inventory</p>
         </div>
-        <div className="flex space-x-2">
-          <button
-            onClick={() => setShowAddProduct(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
-          </button>
-          <Link
-            to="/dashboard/categories"
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors duration-200"
-          >
-            <FolderTree className="h-4 w-4 mr-2" />
-            Manage Categories
-          </Link>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center px-3 py-2 border rounded-lg focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500">
+            <Search className="h-5 w-5 text-gray-400" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search products..."
+              className="ml-2 flex-1 outline-none bg-transparent"
+            />
+          </div>
+          <div className="flex space-x-2">
+            <button
+              onClick={() => setShowAddProduct(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors duration-200"
+            >
+              <Plus className="h-4 w-4 mr-2" />
+              Add Product
+            </button>
+            <Link
+              to="/dashboard/categories"
+              className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 transition-colors duration-200"
+            >
+              <FolderTree className="h-4 w-4 mr-2" />
+              Manage Categories
+            </Link>
+          </div>
         </div>
       </div>
 
       <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search products..."
-            className="block w-full rounded-lg border border-gray-300 py-2 pl-10 pr-3 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-          />
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-        </div>
-
         <div className="relative">
           <button
             type="button"

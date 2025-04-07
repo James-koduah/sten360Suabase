@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import { useUI } from '../context/UIContext';
 import { CURRENCIES } from '../utils/constants';
-import { startOfWeek, endOfWeek, startOfDay, format, isAfter, getWeek, getYear } from 'date-fns';
+import { startOfWeek, endOfWeek, startOfDay, format, isAfter, getWeek, getYear, startOfMonth, endOfMonth, startOfYear, endOfYear, addWeeks, addMonths, addYears } from 'date-fns';
 import {
   Plus,
   ChevronLeft,
@@ -109,15 +109,66 @@ export default function TasksList({ status }: TasksListProps) {
   const [showDeductions, setShowDeductions] = useState<string | null>(null);
   const [showStatusUpdate, setShowStatusUpdate] = useState<string | null>(null);
   const [currentDate, setCurrentDate] = useState(new Date());
+  const [dateFilterType, setDateFilterType] = useState<'week' | 'month' | 'year'>('week');
   
-  // Memoize the week calculations
-  const { weekStart, weekEnd, currentWeek, currentYear } = useMemo(() => {
-    const start = startOfWeek(currentDate, { weekStartsOn: 1 });
-    const end = endOfWeek(currentDate, { weekStartsOn: 1 });
-    const week = getWeek(currentDate, { weekStartsOn: 1 });
-    const year = getYear(currentDate);
-    return { weekStart: start, weekEnd: end, currentWeek: week, currentYear: year };
-  }, [currentDate]);
+  // Memoize the date range calculation
+  const dateRange = useMemo(() => {
+    switch (dateFilterType) {
+      case 'week':
+        return {
+          start: startOfWeek(currentDate, { weekStartsOn: 1 }),
+          end: endOfWeek(currentDate, { weekStartsOn: 1 })
+        };
+      case 'month':
+        return {
+          start: startOfMonth(currentDate),
+          end: endOfMonth(currentDate)
+        };
+      case 'year':
+        return {
+          start: startOfYear(currentDate),
+          end: endOfYear(currentDate)
+        };
+    }
+  }, [currentDate, dateFilterType]);
+
+  const { start: dateRangeStart, end: dateRangeEnd } = dateRange;
+
+  const handleDateChange = (direction: 'prev' | 'next') => {
+    setCurrentDate(prevDate => {
+      const newDate = new Date(prevDate);
+      switch (dateFilterType) {
+        case 'week':
+          return direction === 'prev' ? addWeeks(newDate, -1) : addWeeks(newDate, 1);
+        case 'month':
+          return direction === 'prev' ? addMonths(newDate, -1) : addMonths(newDate, 1);
+        case 'year':
+          return direction === 'prev' ? addYears(newDate, -1) : addYears(newDate, 1);
+      }
+    });
+  };
+
+  const getDateRangeLabel = () => {
+    switch (dateFilterType) {
+      case 'week':
+        return `Week ${getWeek(currentDate, { weekStartsOn: 1 })}, ${getYear(currentDate)}`;
+      case 'month':
+        return format(currentDate, 'MMMM yyyy');
+      case 'year':
+        return format(currentDate, 'yyyy');
+    }
+  };
+
+  const getDateRangeSubtitle = () => {
+    switch (dateFilterType) {
+      case 'week':
+        return `${format(dateRangeStart, 'MMM d')} - ${format(dateRangeEnd, 'MMM d')}`;
+      case 'month':
+        return `${format(dateRangeStart, 'MMM d')} - ${format(dateRangeEnd, 'MMM d')}`;
+      case 'year':
+        return `${format(dateRangeStart, 'MMM d, yyyy')} - ${format(dateRangeEnd, 'MMM d, yyyy')}`;
+    }
+  };
 
   const now = new Date();
   const [delayReason, setDelayReason] = useState('');
@@ -135,18 +186,7 @@ export default function TasksList({ status }: TasksListProps) {
   const { confirm, addToast } = useUI();
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : '';
 
-  useEffect(() => {
-    if (organization?.id) {
-      loadData();
-    }
-  }, [organization?.id, weekStart, weekEnd, status]);
-
-  useEffect(() => {
-    if (!organization || !newTask.worker_id) return;
-    loadWorkerProjects(newTask.worker_id);
-  }, [organization, newTask.worker_id]);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!organization?.id) return;
     const orgId = organization.id;
 
@@ -174,8 +214,8 @@ export default function TasksList({ status }: TasksListProps) {
           )
         `)
         .eq('organization_id', orgId)
-        .gte('created_at', weekStart.toISOString())
-        .lte('created_at', weekEnd.toISOString())
+        .gte('created_at', dateRangeStart.toISOString())
+        .lte('created_at', dateRangeEnd.toISOString())
         .order('created_at', { ascending: false });
 
       if (status) {
@@ -192,9 +232,9 @@ export default function TasksList({ status }: TasksListProps) {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [organization?.id, dateRangeStart, dateRangeEnd, status]);
 
-  const loadWorkerProjects = async (workerId: string) => {
+  const loadWorkerProjects = useCallback(async (workerId: string) => {
     const orgId = organization?.id;
     if (!orgId) return;
 
@@ -219,7 +259,30 @@ export default function TasksList({ status }: TasksListProps) {
     } catch (error) {
       console.error('Error loading worker projects:', error);
     }
-  };
+  }, [organization?.id]);
+
+  useEffect(() => {
+    let mounted = true;
+    
+    if (organization?.id) {
+      loadData();
+    }
+
+    return () => {
+      mounted = false;
+    };
+  }, [loadData]);
+
+  useEffect(() => {
+    let mounted = true;
+    
+    if (!organization || !newTask.worker_id) return;
+    loadWorkerProjects(newTask.worker_id);
+
+    return () => {
+      mounted = false;
+    };
+  }, [loadWorkerProjects, organization, newTask.worker_id]);
 
   const addTask = async () => {
     if (!organization || !newTask.worker_id || !newTask.project_id) return;
@@ -412,18 +475,6 @@ export default function TasksList({ status }: TasksListProps) {
     }
   };
 
-  const handleWeekChange = (direction: 'prev' | 'next') => {
-    setCurrentDate(prevDate => {
-      const newDate = new Date(prevDate);
-      if (direction === 'prev') {
-        newDate.setDate(newDate.getDate() - 7);
-      } else {
-        newDate.setDate(newDate.getDate() + 7);
-      }
-      return newDate;
-    });
-  };
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -472,33 +523,44 @@ export default function TasksList({ status }: TasksListProps) {
         </div>
       </div>
 
-      {/* Week Navigation */}
+      {/* Date Navigation */}
       <div className="bg-white shadow rounded-lg">
         <div className="p-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
             <button
-              onClick={() => handleWeekChange('prev')}
+              onClick={() => handleDateChange('prev')}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
             >
               <ChevronLeft className="h-5 w-5 text-gray-600" />
             </button>
             <div className="text-sm">
-              <span className="font-medium text-gray-900">
-                Week {currentWeek}, {currentYear}
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className="font-medium text-gray-900">
+                  {getDateRangeLabel()}
+                </span>
+                <select
+                  value={dateFilterType}
+                  onChange={(e) => setDateFilterType(e.target.value as 'week' | 'month' | 'year')}
+                  className="text-sm border rounded px-2 py-1"
+                >
+                  <option value="week">Week</option>
+                  <option value="month">Month</option>
+                  <option value="year">Year</option>
+                </select>
+              </div>
               <p className="text-gray-500 text-xs mt-0.5">
-                {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d')}
+                {getDateRangeSubtitle()}
               </p>
             </div>
             <button
-              onClick={() => handleWeekChange('next')}
+              onClick={() => handleDateChange('next')}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
-              disabled={isAfter(weekEnd, now)}
+              disabled={isAfter(dateRangeEnd, new Date())}
             >
               <ChevronRight className="h-5 w-5 text-gray-600" />
             </button>
           </div>
-          <div className="text-sm text-gray-500">{tasks.length} tasks this week</div>
+          <div className="text-sm text-gray-500">{tasks.length} tasks in this {dateFilterType}</div>
         </div>
       </div>
 

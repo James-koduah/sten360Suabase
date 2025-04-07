@@ -7,7 +7,7 @@ import { format } from 'date-fns';
 import { 
   ArrowLeft, Phone, MapPin, Calendar, User, 
   DollarSign, Package, FileText, Upload, X,
-  Loader2
+  Loader2, XCircle
 } from 'lucide-react';
 import { CURRENCIES } from '../../utils/constants';
 
@@ -69,6 +69,124 @@ interface SalesOrder {
   created_at: string;
 }
 
+interface EditClientModalProps {
+  client: Client;
+  isOpen: boolean;
+  onClose: () => void;
+  onSave: (updatedClient: Client) => Promise<void>;
+  isSubmitting: boolean;
+}
+
+function EditClientModal({ client, isOpen, onClose, onSave, isSubmitting }: EditClientModalProps) {
+  const [editedClient, setEditedClient] = useState<Client>(client);
+
+  if (!isOpen) return null;
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await onSave(editedClient);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 overflow-y-auto">
+      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+        <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+          <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+        </div>
+
+        <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+          <form onSubmit={handleSubmit}>
+            <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-medium text-gray-900">Edit Client Details</h3>
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                >
+                  <XCircle className="h-6 w-6" />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <input
+                    type="text"
+                    value={editedClient.name}
+                    onChange={(e) => setEditedClient(prev => ({ ...prev, name: e.target.value }))}
+                    className="mt-1 block w-full min-h-[30px] py-2 px-4 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
+                    placeholder="Enter client name"
+                    required
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Phone</label>
+                  <input
+                    type="tel"
+                    value={editedClient.phone || ''}
+                    onChange={(e) => setEditedClient(prev => ({ ...prev, phone: e.target.value }))}
+                    className="mt-1 block w-full min-h-[30px] py-2 px-4 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
+                    placeholder="Enter phone number"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Address</label>
+                  <textarea
+                    value={editedClient.address || ''}
+                    onChange={(e) => setEditedClient(prev => ({ ...prev, address: e.target.value }))}
+                    rows={3}
+                    className="mt-1 block w-full min-h-[30px] py-2 px-4 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
+                    placeholder="Enter client address"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+                  <input
+                    type="date"
+                    value={editedClient.date_of_birth || ''}
+                    onChange={(e) => setEditedClient(prev => ({ ...prev, date_of_birth: e.target.value }))}
+                    className="mt-1 block w-full min-h-[30px] py-2 px-4 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+              <button
+                type="submit"
+                disabled={isSubmitting}
+                className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:bg-gray-400 transition-colors duration-200"
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="animate-spin h-4 w-4 mr-2" />
+                    Saving...
+                  </>
+                ) : (
+                  'Save Changes'
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors duration-200"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ClientDetails() {
   const { id } = useParams<{ id: string }>();
   const [client, setClient] = useState<Client | null>(null);
@@ -84,6 +202,8 @@ export default function ClientDetails() {
   const { organization } = useAuthStore();
   const { addToast } = useUI();
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : '';
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddCustomFieldModalOpen, setIsAddCustomFieldModalOpen] = useState(false);
 
   useEffect(() => {
     if (!id || !organization) return;
@@ -148,25 +268,26 @@ export default function ClientDetails() {
     }
   };
 
-  const handleUpdateClient = async () => {
-    if (!client || !organization) return;
+  const handleUpdateClient = async (updatedClient: Client) => {
+    if (!organization) return;
 
     setIsSubmitting(true);
     try {
       const { error } = await supabase
         .from('clients')
         .update({
-          name: client.name,
-          phone: client.phone,
-          address: client.address,
-          date_of_birth: client.date_of_birth
+          name: updatedClient.name,
+          phone: updatedClient.phone,
+          address: updatedClient.address,
+          date_of_birth: updatedClient.date_of_birth
         })
-        .eq('id', client.id)
+        .eq('id', updatedClient.id)
         .eq('organization_id', organization.id);
 
       if (error) throw error;
 
-      setIsEditing(false);
+      setClient(updatedClient);
+      setIsEditModalOpen(false);
       addToast({
         type: 'success',
         title: 'Success',
@@ -311,111 +432,105 @@ export default function ClientDetails() {
             </div>
           </div>
           <div className="flex items-center space-x-3">
-            {isEditing ? (
-              <>
-                <button
-                  onClick={() => setIsEditing(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleUpdateClient}
-                  disabled={isSubmitting}
-                  className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="animate-spin h-4 w-4 mr-2" />
-                      Saving...
-                    </>
-                  ) : (
-                    'Save Changes'
-                  )}
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setIsEditing(true)}
-                className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-              >
-                Edit Details
-              </button>
-            )}
+            <button
+              onClick={() => setIsEditModalOpen(true)}
+              className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+            >
+              Edit Details
+            </button>
           </div>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="space-y-8">
-        {/* Basic Information Card */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Basic Information</h3>
-          </div>
-          <div className="px-4 py-5 sm:p-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Name</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={client.name}
-                    onChange={(e) => setClient(prev => prev ? { ...prev, name: e.target.value } : null)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                ) : (
-                  <div className="mt-1 text-sm text-gray-900">{client.name}</div>
-                )}
+        {/* Information Cards Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Basic Information Card */}
+          <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-100">
+            <div className="px-6 py-5 border-b border-gray-100 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Basic Information</h3>
+                <button
+                  onClick={() => setIsEditModalOpen(true)}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Edit Details
+                </button>
               </div>
+            </div>
+            <div className="p-6">
+              <div className="grid grid-cols-1 gap-6">
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Name</label>
+                  <div className="mt-1 text-base text-gray-900 font-medium">{client.name}</div>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Phone</label>
-                {isEditing ? (
-                  <input
-                    type="tel"
-                    value={client.phone || ''}
-                    onChange={(e) => setClient(prev => prev ? { ...prev, phone: e.target.value } : null)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                ) : (
-                  <div className="mt-1 text-sm text-gray-900 flex items-center">
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Phone</label>
+                  <div className="mt-1 text-base text-gray-900 flex items-center">
                     <Phone className="h-4 w-4 mr-2 text-gray-400" />
                     {client.phone || 'Not provided'}
                   </div>
-                )}
-              </div>
+                </div>
 
-              <div className="md:col-span-2">
-                <label className="block text-sm font-medium text-gray-700">Address</label>
-                {isEditing ? (
-                  <textarea
-                    value={client.address || ''}
-                    onChange={(e) => setClient(prev => prev ? { ...prev, address: e.target.value } : null)}
-                    rows={3}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                ) : (
-                  <div className="mt-1 text-sm text-gray-900 flex items-start">
-                    <MapPin className="h-4 w-4 mr-2 mt-1 text-gray-400" />
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Address</label>
+                  <div className="mt-1 text-base text-gray-900 flex items-start">
+                    <MapPin className="h-4 w-4 mr-2 mt-1 text-gray-400 flex-shrink-0" />
                     {client.address || 'Not provided'}
                   </div>
-                )}
-              </div>
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
-                {isEditing ? (
-                  <input
-                    type="date"
-                    value={client.date_of_birth || ''}
-                    onChange={(e) => setClient(prev => prev ? { ...prev, date_of_birth: e.target.value } : null)}
-                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                  />
-                ) : (
-                  <div className="mt-1 text-sm text-gray-900 flex items-center">
+                <div className="space-y-1">
+                  <label className="block text-sm font-medium text-gray-700">Date of Birth</label>
+                  <div className="mt-1 text-base text-gray-900 flex items-center">
                     <Calendar className="h-4 w-4 mr-2 text-gray-400" />
-                    {client.date_of_birth ? format(new Date(client.date_of_birth), 'MMM d, yyyy') : 'Not provided'}
+                    {client.date_of_birth ? format(new Date(client.date_of_birth), 'MMMM d, yyyy') : 'Not provided'}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Custom Information Card */}
+          <div className="bg-white shadow-lg rounded-xl overflow-hidden border border-gray-100">
+            <div className="px-6 py-5 border-b border-gray-100 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-900">Custom Information</h3>
+                <button
+                  onClick={() => setIsAddCustomFieldModalOpen(true)}
+                  className="inline-flex items-center px-3 py-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                >
+                  Add Custom Field
+                </button>
+              </div>
+            </div>
+            <div className="p-6">
+              <div className="space-y-4">
+                {client.custom_fields?.map((field) => (
+                  <div key={field.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+                    <div className="flex-1">
+                      <span className="font-medium">{field.title}: </span>
+                      {field.type === 'file' ? (
+                        <a href={field.value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
+                          View File
+                        </a>
+                      ) : (
+                        <span>{field.value}</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => handleDeleteCustomField(field.id)}
+                      className="ml-4 p-1 text-red-600 hover:text-red-800 rounded-full hover:bg-red-50"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))}
+                {(!client.custom_fields || client.custom_fields.length === 0) && (
+                  <div className="text-center text-gray-500 py-4">
+                    No custom information added yet
                   </div>
                 )}
               </div>
@@ -423,113 +538,114 @@ export default function ClientDetails() {
           </div>
         </div>
 
-        {/* Custom Fields Card */}
-        <div className="bg-white shadow rounded-lg overflow-hidden">
-          <div className="px-4 py-5 sm:px-6 border-b border-gray-200">
-            <h3 className="text-lg font-medium text-gray-900">Custom Information</h3>
-          </div>
-          <div className="px-4 py-5 sm:p-6">
-            <div className="space-y-4">
-              {client.custom_fields?.map((field) => (
-                <div key={field.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
-                  <div className="flex-1">
-                    <span className="font-medium">{field.title}: </span>
-                    {field.type === 'file' ? (
-                      <a href={field.value} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">
-                        View File
-                      </a>
-                    ) : (
-                      <span>{field.value}</span>
-                    )}
-                  </div>
-                  <button
-                    onClick={() => handleDeleteCustomField(field.id)}
-                    className="ml-4 p-1 text-red-600 hover:text-red-800 rounded-full hover:bg-red-50"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                </div>
-              ))}
+        {/* Add Custom Field Modal */}
+        {isAddCustomFieldModalOpen && (
+          <div className="fixed inset-0 z-50 overflow-y-auto">
+            <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:block sm:p-0">
+              <div className="fixed inset-0 transition-opacity" aria-hidden="true">
+                <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
+              </div>
 
-              {/* Add Custom Field Form */}
-              <div className="bg-gray-50 p-4 rounded-lg border border-gray-200">
-                <h4 className="text-sm font-medium text-gray-900 mb-4">Add Custom Information</h4>
-                <div className="space-y-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Type</label>
-                    <select
-                      value={newCustomField.type}
-                      onChange={(e) => {
-                        const type = e.target.value as 'text' | 'file';
-                        setNewCustomField(prev => ({
-                          ...prev,
-                          type,
-                          value: '',
-                          file: null
-                        }));
-                      }}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                    >
-                      <option value="text">Text</option>
-                      <option value="file">File</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">Title</label>
-                    <input
-                      type="text"
-                      value={newCustomField.title}
-                      onChange={(e) => setNewCustomField(prev => ({ ...prev, title: e.target.value }))}
-                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                      placeholder="Enter field title"
-                    />
-                  </div>
-                  {newCustomField.type === 'text' ? (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">Value</label>
-                      <input
-                        type="text"
-                        value={newCustomField.value}
-                        onChange={(e) => setNewCustomField(prev => ({ ...prev, value: e.target.value }))}
-                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
-                        placeholder="Enter value"
-                      />
+              <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+
+              <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+                <form onSubmit={(e) => { e.preventDefault(); handleAddCustomField(); }}>
+                  <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-medium text-gray-900">Add Custom Information</h3>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddCustomFieldModalOpen(false)}
+                        className="text-gray-400 hover:text-gray-500 focus:outline-none"
+                      >
+                        <XCircle className="h-6 w-6" />
+                      </button>
                     </div>
-                  ) : (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700">File</label>
-                      <div className="mt-1 flex items-center">
-                        <input
-                          type="file"
+
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Type</label>
+                        <select
+                          value={newCustomField.type}
                           onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            if (file) {
-                              setNewCustomField(prev => ({ ...prev, file }));
-                            }
+                            const type = e.target.value as 'text' | 'file';
+                            setNewCustomField(prev => ({
+                              ...prev,
+                              type,
+                              value: '',
+                              file: null
+                            }));
                           }}
-                          className="hidden"
-                          id="custom-file"
-                        />
-                        <label
-                          htmlFor="custom-file"
-                          className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                          className="mt-1 block w-full min-h-[30px] py-2 px-4 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
                         >
-                          <Upload className="h-4 w-4 mr-2" />
-                          Choose File
-                        </label>
-                        {newCustomField.file && (
-                          <span className="ml-3 text-sm text-gray-500">
-                            {newCustomField.file.name}
-                          </span>
-                        )}
+                          <option value="text">Text</option>
+                          <option value="file">File</option>
+                        </select>
                       </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700">Title</label>
+                        <input
+                          type="text"
+                          value={newCustomField.title}
+                          onChange={(e) => setNewCustomField(prev => ({ ...prev, title: e.target.value }))}
+                          className="mt-1 block w-full min-h-[30px] py-2 px-4 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
+                          placeholder="Enter field title"
+                          required
+                        />
+                      </div>
+
+                      {newCustomField.type === 'text' ? (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">Value</label>
+                          <input
+                            type="text"
+                            value={newCustomField.value}
+                            onChange={(e) => setNewCustomField(prev => ({ ...prev, value: e.target.value }))}
+                            className="mt-1 block w-full min-h-[30px] py-2 px-4 rounded-lg border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm transition-colors duration-200"
+                            placeholder="Enter value"
+                            required
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700">File</label>
+                          <div className="mt-1 flex items-center">
+                            <input
+                              type="file"
+                              onChange={(e) => {
+                                const file = e.target.files?.[0];
+                                if (file) {
+                                  setNewCustomField(prev => ({ ...prev, file }));
+                                }
+                              }}
+                              className="hidden"
+                              id="custom-file"
+                              required
+                            />
+                            <label
+                              htmlFor="custom-file"
+                              className="cursor-pointer inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+                            >
+                              <Upload className="h-4 w-4 mr-2" />
+                              Choose File
+                            </label>
+                            {newCustomField.file && (
+                              <span className="ml-3 text-sm text-gray-500">
+                                {newCustomField.file.name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
                     </div>
-                  )}
-                  <div className="flex justify-end">
+                  </div>
+
+                  <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
                     <button
-                      onClick={handleAddCustomField}
-                      disabled={isSubmitting || !newCustomField.title || (!newCustomField.value && !newCustomField.file)}
-                      className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-gray-400"
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="w-full inline-flex justify-center rounded-lg border border-transparent shadow-sm px-4 py-2 bg-blue-600 text-base font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:ml-3 sm:w-auto sm:text-sm disabled:bg-gray-400 transition-colors duration-200"
                     >
                       {isSubmitting ? (
                         <>
@@ -540,12 +656,20 @@ export default function ClientDetails() {
                         'Add Field'
                       )}
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddCustomFieldModalOpen(false)}
+                      className="mt-3 w-full inline-flex justify-center rounded-lg border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm transition-colors duration-200"
+                    >
+                      Cancel
+                    </button>
                   </div>
-                </div>
+                </form>
               </div>
             </div>
           </div>
-        </div>
+        )}
+
         {/* Financial Summary Section */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Orders Summary */}
@@ -566,7 +690,7 @@ export default function ClientDetails() {
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Outstanding Balance</span>
+                    <span className="text-sm font-medium text-red-600">Outstanding Balance</span>
                     <span className={`text-lg font-bold ${
                       (client.orders?.reduce((sum, order) => sum + (order.outstanding_balance || 0), 0) || 0) > 0 
                         ? 'text-red-600' 
@@ -579,8 +703,8 @@ export default function ClientDetails() {
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Total Amount</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-sm font-medium text-blue-600">Total Amount</span>
+                    <span className="text-lg font-bold text-blue-600">
                       {currencySymbol} {(client.orders?.reduce((sum, order) => sum + order.total_amount, 0) || 0).toFixed(2)}
                     </span>
                   </div>
@@ -588,8 +712,8 @@ export default function ClientDetails() {
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Total Paid</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-sm font-medium text-green-600">Total Paid</span>
+                    <span className="text-lg font-bold text-green-600">
                       {currencySymbol} {(client.orders?.reduce((sum, order) => sum + (order.total_amount - order.outstanding_balance), 0) || 0).toFixed(2)}
                     </span>
                   </div>
@@ -616,7 +740,7 @@ export default function ClientDetails() {
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Outstanding Balance</span>
+                    <span className="text-sm font-medium text-red-600">Outstanding Balance</span>
                     <span className={`text-lg font-bold ${
                       (client.sales_orders?.reduce((sum, order) => sum + (order.outstanding_balance || 0), 0) || 0) > 0 
                         ? 'text-red-600' 
@@ -629,8 +753,8 @@ export default function ClientDetails() {
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Total Amount</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-sm font-medium text-blue-600">Total Amount</span>
+                    <span className="text-lg font-bold text-blue-600">
                       {currencySymbol} {(client.sales_orders?.reduce((sum, order) => sum + order.total_amount, 0) || 0).toFixed(2)}
                     </span>
                   </div>
@@ -638,8 +762,8 @@ export default function ClientDetails() {
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Total Paid</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-sm font-medium text-green-600">Total Paid</span>
+                    <span className="text-lg font-bold text-green-600">
                       {currencySymbol} {(client.sales_orders?.reduce((sum, order) => sum + (order.total_amount - order.outstanding_balance), 0) || 0).toFixed(2)}
                     </span>
                   </div>
@@ -666,7 +790,7 @@ export default function ClientDetails() {
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Total Outstanding Balance</span>
+                    <span className="text-sm font-medium text-red-600">Outstanding Balance</span>
                     <span className={`text-lg font-bold ${client.total_balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {currencySymbol} {client.total_balance.toFixed(2)}
                     </span>
@@ -675,8 +799,8 @@ export default function ClientDetails() {
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Total Amount</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-sm font-medium text-blue-600">Total Amount</span>
+                    <span className="text-lg font-bold text-blue-600">
                       {currencySymbol} {(
                         (client.orders?.reduce((sum, order) => sum + order.total_amount, 0) || 0) +
                         (client.sales_orders?.reduce((sum, order) => sum + order.total_amount, 0) || 0)
@@ -687,8 +811,8 @@ export default function ClientDetails() {
 
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-gray-700">Total Paid</span>
-                    <span className="text-lg font-bold text-gray-900">
+                    <span className="text-sm font-medium text-green-600">Total Paid</span>
+                    <span className="text-lg font-bold text-green-600">
                       {currencySymbol} {(
                         (client.orders?.reduce((sum, order) => sum + (order.total_amount - order.outstanding_balance), 0) || 0) +
                         (client.sales_orders?.reduce((sum, order) => sum + (order.total_amount - order.outstanding_balance), 0) || 0)
@@ -700,7 +824,6 @@ export default function ClientDetails() {
             </div>
           </div>
         </div>
-
 
         {/* Orders History Card */}
         <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -817,6 +940,14 @@ export default function ClientDetails() {
           </div>
         </div>
       </div>
+
+      <EditClientModal
+        client={client}
+        isOpen={isEditModalOpen}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={handleUpdateClient}
+        isSubmitting={isSubmitting}
+      />
     </div>
   );
 } 
