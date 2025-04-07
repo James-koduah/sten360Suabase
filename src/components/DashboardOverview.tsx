@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useAuthStore } from '../stores/authStore';
 import { supabase } from '../lib/supabase';
 import { ShoppingCart, DollarSign, Package, CheckCircle, Clock } from 'lucide-react';
-import { CURRENCIES } from '../utils/constants';
+import { CURRENCIES, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '../utils/constants';
 import { Link } from 'react-router-dom';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend, LineChart, Line } from 'recharts';
 
 // Helper function to format numbers with commas
 const formatNumber = (num: number) => {
@@ -26,6 +26,12 @@ interface Stats {
   completedOrdersToday: number;
   completedTasksToday: number;
   ordersDueToday: number;
+  monthlyOrderStats: {
+    pending: number;
+    in_progress: number;
+    completed: number;
+    cancelled: number;
+  };
 }
 
 interface DailyRevenue {
@@ -33,6 +39,19 @@ interface DailyRevenue {
   total: number;
   sales: number;
   service: number;
+}
+
+type OrderStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+
+interface OrderStatusData {
+  name: string;
+  value: number;
+  status: OrderStatus;
+}
+
+interface DailyOrderStats {
+  date: string;
+  orders: number;
 }
 
 export default function DashboardOverview() {
@@ -46,11 +65,18 @@ export default function DashboardOverview() {
     salesToday: 0,
     completedOrdersToday: 0,
     completedTasksToday: 0,
-    ordersDueToday: 0
+    ordersDueToday: 0,
+    monthlyOrderStats: {
+      pending: 0,
+      in_progress: 0,
+      completed: 0,
+      cancelled: 0
+    }
   });
   const [dailyRevenue, setDailyRevenue] = useState<DailyRevenue[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [screenWidth, setScreenWidth] = useState(window.innerWidth);
+  const [dailyOrderStats, setDailyOrderStats] = useState<DailyOrderStats[]>([]);
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : '$';
 
   useEffect(() => {
@@ -271,6 +297,50 @@ export default function DashboardOverview() {
           .not('status', 'eq', 'cancelled')
           .eq('due_date', today);
 
+        // Get current month's order statistics
+        const { data: monthlyOrders } = await supabase
+          .from('orders')
+          .select('status')
+          .eq('organization_id', organization.id)
+          .gte('created_at', firstDayStr)
+          .lte('created_at', lastDayStr + 'T23:59:59');
+
+        const monthlyOrderStats = {
+          pending: monthlyOrders?.filter(order => order.status === 'pending').length || 0,
+          in_progress: monthlyOrders?.filter(order => order.status === 'in_progress').length || 0,
+          completed: monthlyOrders?.filter(order => order.status === 'completed').length || 0,
+          cancelled: monthlyOrders?.filter(order => order.status === 'cancelled').length || 0
+        };
+
+        // Get daily order stats for the last 30 days
+        const { data: dailyOrders } = await supabase
+          .from('orders')
+          .select('created_at')
+          .eq('organization_id', organization.id)
+          .gte('created_at', thirtyDaysAgoStr)
+          .order('created_at', { ascending: true });
+
+        // Process daily order counts
+        const orderCounts = new Map<string, number>();
+        dailyOrders?.forEach(order => {
+          const date = order.created_at.split('T')[0];
+          orderCounts.set(date, (orderCounts.get(date) || 0) + 1);
+        });
+
+        // Fill in missing dates with 0
+        const dailyOrderData: DailyOrderStats[] = [];
+        for (let i = 0; i < 30; i++) {
+          const date = new Date();
+          date.setDate(date.getDate() - i);
+          const dateStr = date.toISOString().split('T')[0];
+          dailyOrderData.unshift({
+            date: dateStr,
+            orders: orderCounts.get(dateStr) || 0
+          });
+        }
+
+        setDailyOrderStats(dailyOrderData);
+
         setStats({
           activeOrders: activeOrdersCount || 0,
           revenueToday,
@@ -282,7 +352,8 @@ export default function DashboardOverview() {
           outstandingOrders: outstandingOrders?.reduce((sum, order) => sum + (order.outstanding_balance || 0), 0) || 0,
           completedOrdersToday: completedOrdersTodayCount || 0,
           completedTasksToday: completedTasksTodayCount || 0,
-          ordersDueToday: ordersDueTodayCount || 0
+          ordersDueToday: ordersDueTodayCount || 0,
+          monthlyOrderStats
         });
         setDailyRevenue(dailyRevenueData);
       } catch (error) {
@@ -390,6 +461,32 @@ export default function DashboardOverview() {
       link: undefined
     }
   ];
+
+  const monthlyOrderData: OrderStatusData[] = stats.monthlyOrderStats ? [
+    { name: ORDER_STATUS_LABELS.pending, value: stats.monthlyOrderStats.pending, status: 'pending' },
+    { name: ORDER_STATUS_LABELS.in_progress, value: stats.monthlyOrderStats.in_progress, status: 'in_progress' },
+    { name: ORDER_STATUS_LABELS.completed, value: stats.monthlyOrderStats.completed, status: 'completed' },
+    { name: ORDER_STATUS_LABELS.cancelled, value: stats.monthlyOrderStats.cancelled, status: 'cancelled' }
+  ] : [];
+
+  const COLORS = [
+    '#fef9c3', // text-yellow-800
+    '#1E40AF', // text-blue-800
+    '#065F46', // text-green-800
+    '#dc2626'  // text-red-800
+  ];
+
+  const renderStatusItem = (status: OrderStatusData, index: number) => (
+    <div key={status.name} className="flex items-center justify-between">
+      <div className="flex items-center">
+        <div className={`w-3 h-3 rounded-full`} style={{ backgroundColor: COLORS[index] }} />
+        <span className="ml-2 text-sm font-medium" style={{ color: COLORS[index] }}>
+          {status.name}
+        </span>
+      </div>
+      <span className="text-sm text-gray-500">{status.value} orders</span>
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -560,6 +657,80 @@ export default function DashboardOverview() {
                 <p className="text-sm text-gray-500">View sales reports and trends</p>
               </div>
             </Link>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white shadow rounded-lg">
+        <div className="px-4 py-5 sm:p-6">
+          <h3 className="text-lg font-medium leading-6 text-gray-900 mb-4">
+            Orders for {new Date().toLocaleString('default', { month: 'long', year: 'numeric' })}
+          </h3>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div>
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Order Status Distribution</h4>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={monthlyOrderData}
+                      cx="50%"
+                      cy="50%"
+                      labelLine={false}
+                      outerRadius={130}
+                      innerRadius={70}
+                      fill="#8884d8"
+                      dataKey="value"
+                    >
+                      {monthlyOrderData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={COLORS[index]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                    <Legend />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+            <div className="lg:border-l lg:border-gray-200 lg:pl-6">
+              <h4 className="text-sm font-medium text-gray-900 mb-2">Daily Order Trends (30 Days)</h4>
+              <div className="h-[300px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={dailyOrderStats}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                    <XAxis 
+                      dataKey="date" 
+                      tickFormatter={(date) => new Date(date).getDate().toString()}
+                      tick={{ fontSize: 10 }}
+                      interval={4}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 10 }}
+                      width={30}
+                    />
+                    <Tooltip 
+                      formatter={(value) => [value, 'Orders']}
+                      labelFormatter={(date) => new Date(date).toLocaleDateString()}
+                      contentStyle={{ 
+                        backgroundColor: 'white', 
+                        border: '1px solid #e5e7eb', 
+                        borderRadius: '0.5rem',
+                        fontSize: '12px',
+                        padding: '4px 8px'
+                      }}
+                    />
+                    <Line 
+                      type="monotone" 
+                      dataKey="orders" 
+                      stroke="#3B82F6" 
+                      strokeWidth={2}
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
           </div>
         </div>
       </div>
