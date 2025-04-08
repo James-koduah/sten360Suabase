@@ -840,7 +840,7 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
                     type="number"
                     min="0"
                     max={totalAmount}
-                    step="0.01"
+                    step="0"
                     value={formData.initial_payment}
                     onChange={(e) => setFormData(prev => ({ ...prev, initial_payment: parseFloat(e.target.value) || 0 }))}
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white transition-all duration-200 hover:border-blue-400"
