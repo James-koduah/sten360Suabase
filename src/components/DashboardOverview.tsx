@@ -327,11 +327,7 @@ export default function DashboardOverview() {
           }))
           .sort((a, b) => a.date.localeCompare(b.date));
 
-        setStats(prev => ({
-          ...prev,
-          currentMonthRevenue,
-          revenueToday: dailyRevenueData[dailyRevenueData.length - 1]?.total || 0
-        }));
+        // Only update the daily revenue data, not the stats
         setDailyRevenue(dailyRevenueData);
       } catch (error) {
         console.error('Error loading revenue data:', error);
