@@ -119,11 +119,11 @@ export default function FinancialDashboard() {
 
   const getDateRange = () => {
     if (!startDate || !endDate) {
-      // Default to current month if no dates selected
+      // Default to current day if no dates selected
       const now = new Date();
       return {
-        start: startOfDay(new Date(now.getFullYear(), now.getMonth(), 1)),
-        end: endOfDay(new Date(now.getFullYear(), now.getMonth() + 1, 0))
+        start: startOfDay(now),
+        end: endOfDay(now)
       };
     }
     return {

@@ -54,19 +54,33 @@ export default function Categories() {
     if (!organization?.id) return;
 
     try {
-      const { data, error } = await supabase
+      // First get all categories
+      const { data: categoriesData, error: categoriesError } = await supabase
         .from('categories')
         .select('*')
         .eq('organization_id', organization.id)
         .order('name');
 
-      if (error) throw error;
+      if (categoriesError) throw categoriesError;
 
-      // Calculate product count for each category
-      const categoriesWithCount = data.map(category => ({
-        ...category,
-        product_count: products.filter(p => p.category === category.name).length
-      }));
+      // Then get counts for each category
+      const categoriesWithCount = await Promise.all(
+        categoriesData.map(async (category) => {
+          const { count, error: countError } = await supabase
+            .from('products')
+            .select('*', { count: 'exact', head: true })
+            .eq('organization_id', organization.id)
+            .eq('category', category.name);
+
+          if (countError) throw countError;
+
+          return {
+            id: category.id,
+            name: category.name,
+            product_count: count || 0
+          };
+        })
+      );
 
       setCategories(categoriesWithCount);
     } catch (error) {
