@@ -549,13 +549,11 @@ export default function DashboardOverview() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {statCards.map((stat) => {
           const isLoaded = loadedStats.includes(stat.key);
-          
-          return (
+          const CardContent = (
             <div
-              key={stat.name}
               className={`bg-white overflow-hidden shadow rounded-lg transition-opacity duration-300 ${
                 isLoaded ? 'opacity-100' : 'opacity-50'
-              }`}
+              } ${stat.link ? 'hover:shadow-md cursor-pointer' : ''}`}
             >
               <div className="p-3">
                 <div className="flex items-center">
@@ -574,6 +572,16 @@ export default function DashboardOverview() {
                   </div>
                 </div>
               </div>
+            </div>
+          );
+
+          return stat.link ? (
+            <Link key={stat.name} to={stat.link}>
+              {CardContent}
+            </Link>
+          ) : (
+            <div key={stat.name}>
+              {CardContent}
             </div>
           );
         })}
