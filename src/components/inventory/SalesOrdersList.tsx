@@ -9,16 +9,17 @@ import { CURRENCIES } from '../../utils/constants';
 import { format, startOfWeek, endOfWeek, getWeek, getYear, isAfter, startOfMonth, endOfMonth, addMonths, addWeeks, addYears, startOfYear, endOfYear } from 'date-fns';
 import CreateSalesOrderForm from './CreateSalesOrderForm';
 import { RecordPayment } from '../orders/RecordPayment';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 type PaymentStatus = keyof typeof PAYMENT_STATUS_LABELS;
 
 export default function SalesOrdersList() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<SalesOrder[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<PaymentStatus | 'all'>('all');
-  const [showAddOrder, setShowAddOrder] = useState(false);
+  const [showAddOrder, setShowAddOrder] = useState(searchParams.get('showCreateForm') === 'true');
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [amount, setAmount] = useState<string>('');
@@ -58,6 +59,11 @@ export default function SalesOrdersList() {
     if (!organization) return;
     loadOrders();
   }, [organization, currentDate, dateFilterType]);
+
+  useEffect(() => {
+    // Update showAddOrder when the query parameter changes
+    setShowAddOrder(searchParams.get('showCreateForm') === 'true');
+  }, [searchParams]);
 
   const loadOrders = async () => {
     if (!organization?.id) return;
@@ -256,6 +262,14 @@ export default function SalesOrdersList() {
      order.client?.name.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
+  // Add a function to handle closing the form
+  const handleCloseForm = () => {
+    setShowAddOrder(false);
+    // Remove the query parameter when closing the form
+    searchParams.delete('showCreateForm');
+    setSearchParams(searchParams);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -336,10 +350,10 @@ export default function SalesOrdersList() {
       {showAddOrder && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowAddOrder(false)} />
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={handleCloseForm} />
             <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-4xl">
               <CreateSalesOrderForm
-                onClose={() => setShowAddOrder(false)}
+                onClose={handleCloseForm}
                 onSuccess={loadOrders}
               />
             </div>

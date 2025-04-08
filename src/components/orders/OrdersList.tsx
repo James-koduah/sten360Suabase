@@ -3,7 +3,7 @@ import { Plus, Search, Edit2, Trash2, Calendar, User, Package, ChevronLeft, Chev
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import CreateOrderForm from './CreateOrderForm';
 import { format, startOfWeek, endOfWeek, getWeek, getYear, isAfter, startOfMonth, endOfMonth, addMonths, addWeeks, addYears, startOfYear, endOfYear } from 'date-fns';
 import { CURRENCIES, ORDER_STATUS_COLORS, ORDER_STATUS_LABELS } from '../../utils/constants';
@@ -46,11 +46,12 @@ interface Order {
 }
 
 export default function OrdersList() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [orders, setOrders] = useState<Order[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<keyof typeof ORDER_STATUS_COLORS | 'all'>('all');
-  const [showAddOrder, setShowAddOrder] = useState(false);
+  const [showAddOrder, setShowAddOrder] = useState(searchParams.get('showCreateForm') === 'true');
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dateFilterType, setDateFilterType] = useState<'week' | 'month' | 'year'>('week');
   
@@ -85,6 +86,11 @@ export default function OrdersList() {
     if (!organization) return;
     loadOrders();
   }, [organization, currentDate, dateFilterType]);
+
+  useEffect(() => {
+    // Update showAddOrder when the query parameter changes
+    setShowAddOrder(searchParams.get('showCreateForm') === 'true');
+  }, [searchParams]);
 
   const loadOrders = async () => {
     if (!organization?.id) return;
@@ -173,6 +179,14 @@ export default function OrdersList() {
     (statusFilter === 'all' || order.status === statusFilter)
   );
 
+  // Add a function to handle closing the form
+  const handleCloseForm = () => {
+    setShowAddOrder(false);
+    // Remove the query parameter when closing the form
+    searchParams.delete('showCreateForm');
+    setSearchParams(searchParams);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -254,10 +268,10 @@ export default function OrdersList() {
       {showAddOrder && (
         <div className="fixed inset-0 z-50 overflow-y-auto">
           <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
-            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={() => setShowAddOrder(false)} />
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" onClick={handleCloseForm} />
             <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-4xl">
               <CreateOrderForm
-                onClose={() => setShowAddOrder(false)}
+                onClose={handleCloseForm}
                 onSuccess={loadOrders}
               />
             </div>
