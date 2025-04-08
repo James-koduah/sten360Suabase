@@ -60,6 +60,49 @@ function OrderSummary({ orderData, selectedClient, selectedServices, selectedWor
     window.print();
   };
 
+  const receiptContent = [
+    {
+      text: "Order Number:",
+      main: orderData.order_number,
+      icon: "fa fa-list-alt"
+    },
+    {
+      text: "Client:",
+      main: selectedClient.name,
+      icon: "fa fa-user"
+    },
+    {
+      text: "Total Amount:",
+      main: `${currencySymbol} ${totalAmount.toFixed(2)}`,
+      icon: "fa fa-money"
+    },
+    {
+      text: "Due Date:",
+      main: formData.due_date ? format(new Date(formData.due_date), 'dd/MM/yyyy') : 'N/A',
+      icon: "fa fa-calendar"
+    }
+  ];
+
+  if (formData.initial_payment > 0) {
+    receiptContent.push(
+      {
+        text: "Initial Payment:",
+        main: `${currencySymbol} ${formData.initial_payment.toFixed(2)}`,
+        icon: "fa fa-credit-card"
+      },
+      {
+        text: "Payment Method:",
+        main: formData.payment_method.charAt(0).toUpperCase() + formData.payment_method.slice(1).replace('_', ' '),
+        icon: "fa fa-credit-card"
+      },
+      {
+        text: "Outstanding Balance:",
+        main: `${currencySymbol} ${(totalAmount - formData.initial_payment).toFixed(2)}`,
+        icon: "fa fa-balance-scale"
+      }
+    );
+  }
+
   return (
     <div className="bg-white rounded-lg shadow-xl max-w-[57mm] w-full mx-auto overflow-y-auto max-h-[90vh] border border-gray-100">
       <div className="px-4 py-6">
@@ -164,86 +207,58 @@ function OrderSummary({ orderData, selectedClient, selectedServices, selectedWor
             <div className="receipt-title">STEN360</div>
           </div>
 
-          {/* Order Number */}
-          <div className="receipt-row">
-            <span className="receipt-label">Order #:</span>
-            <span className="receipt-value">{orderData.order_number}</span>
+          {/* Receipt Breakdown */}
+          <div className="receipt-breakdown">
+            <div className="receipt-breakdown--header mb-4">
+              <p className="text-sm text-gray-500">Receipt for</p>
+              <h2 className="text-xl font-bold text-gray-900">{selectedClient.name}</h2>
+            </div>
+            
+            <ul className="space-y-3">
+              {receiptContent.map((item, index) => (
+                <li key={index} className="flex items-start space-x-3">
+                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                    <i className={`${item.icon} text-blue-600`}></i>
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm text-gray-600">{item.text}</p>
+                    <p className="text-sm font-medium text-gray-900">{item.main}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
           </div>
 
-          {/* Description (if exists) */}
+          {/* Services Section */}
+          <div className="mt-6">
+            <h3 className="text-sm font-medium text-gray-900 mb-3">Services</h3>
+            <div className="space-y-2">
+              {selectedServices.map(({ service, quantity }) => (
+                <div key={service.id} className="flex justify-between items-center">
+                  <div>
+                    <p className="text-sm text-gray-900">{service.name}</p>
+                    <p className="text-xs text-gray-500">x{quantity}</p>
+                  </div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {currencySymbol} {(service.cost * quantity).toFixed(2)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Description */}
           {formData.description && (
-            <div className="receipt-row">
-              <span className="receipt-label">Desc:</span>
-              <span className="receipt-value">{formData.description}</span>
+            <div className="mt-6">
+              <h3 className="text-sm font-medium text-gray-900 mb-3">Description</h3>
+              <p className="text-sm text-gray-600">{formData.description}</p>
             </div>
           )}
-
-          {/* Due Date */}
-          <div className="receipt-row">
-            <span className="receipt-label">Due:</span>
-            <span className="receipt-value">
-              {formData.due_date ? format(new Date(formData.due_date), 'dd/MM/yyyy') : 'N/A'}
-            </span>
-          </div>
-
-          <div className="receipt-divider" />
-
-          {/* Services */}
-          {selectedServices.map(({ service, quantity }) => (
-            <div key={service.id} className="receipt-service">
-              <div className="receipt-row">
-                <span className="receipt-service-name">{service.name}</span>
-                <span className="receipt-service-quantity">x{quantity}</span>
-              </div>
-              <div className="receipt-row">
-                <span className="receipt-value">{currencySymbol} {(service.cost * quantity).toFixed(2)}</span>
-              </div>
-            </div>
-          ))}
-
-          <div className="receipt-divider" />
-
-          {/* Payment Information */}
-          {formData.initial_payment > 0 && (
-            <>
-              <div className="receipt-row">
-                <span className="receipt-label">Payment:</span>
-                <span className="receipt-value">{currencySymbol} {formData.initial_payment.toFixed(2)}</span>
-              </div>
-              <div className="receipt-row">
-                <span className="receipt-label">Method:</span>
-                <span className="receipt-value">
-                  {formData.payment_method.charAt(0).toUpperCase() + formData.payment_method.slice(1).replace('_', ' ')}
-                </span>
-              </div>
-            </>
-          )}
-
-          {/* Total Amount */}
-          <div className="receipt-row receipt-total">
-            <span>Total:</span>
-            <span className="receipt-value">{currencySymbol} {totalAmount.toFixed(2)}</span>
-          </div>
-
-          {/* Outstanding Balance */}
-          {formData.initial_payment > 0 && (
-            <div className="receipt-row receipt-total">
-              <span>Balance:</span>
-              <span className="receipt-value">{currencySymbol} {(totalAmount - formData.initial_payment).toFixed(2)}</span>
-            </div>
-          )}
-
-          <div className="receipt-divider" />
-
-          {/* Client Name */}
-          <div className="receipt-row">
-            <span className="receipt-label">Client:</span>
-            <span className="receipt-value">{selectedClient.name}</span>
-          </div>
 
           {/* Footer */}
-          <div className="receipt-footer">
-            Thank you for your business!
+          <div className="mt-8 text-center">
+            <p className="text-sm text-gray-500">Thank you for your business!</p>
+            <p className="text-xs text-gray-400 mt-2">Generated on {format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
           </div>
         </div>
       </div>

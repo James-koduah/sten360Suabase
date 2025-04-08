@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Minus, Loader2, Package, CreditCard, User } from 'lucide-react';
+import { X, Plus, Minus, Loader2, Package, CreditCard } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
