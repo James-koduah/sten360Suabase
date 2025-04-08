@@ -40,10 +40,16 @@ export default function WorkerHeader({
 
   // Calculate stats
   const assignedTasks = tasks.filter(t => t.status === 'pending');
+  const inProgressTasks = tasks.filter(t => t.status === 'in_progress');
   const completedTasks = tasks.filter(t => t.status === 'completed');
 
   // Calculate amounts for assigned and completed tasks
   const assignedTasksAmount = assignedTasks.reduce((sum, task) => {
+    const deductions = task.deductions?.reduce((dSum, d) => dSum + d.amount, 0) || 0;
+    return sum + (task.amount - deductions);
+  }, 0);
+
+  const inProgressTasksAmount = inProgressTasks.reduce((sum, task) => {
     const deductions = task.deductions?.reduce((dSum, d) => dSum + d.amount, 0) || 0;
     return sum + (task.amount - deductions);
   }, 0);
@@ -294,39 +300,62 @@ export default function WorkerHeader({
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
-          <div className="bg-yellow-50 rounded-lg p-4">
+        <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-5">
+          <div className="bg-yellow-50 rounded-lg p-3">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <Calendar className="h-6 w-6 text-yellow-600" />
+                <Calendar className="h-5 w-5 text-yellow-600" />
               </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-yellow-900">Assigned Tasks</p>
-                <p className="mt-1 text-2xl font-semibold text-yellow-900">{assignedTasks.length} | {currencySymbol}{assignedTasksAmount.toFixed(2)}</p>
-                
+              <div className="ml-2">
+                <p className="text-xs font-medium text-yellow-900">Assigned Tasks</p>
+                <p className="mt-0.5 text-lg font-semibold text-yellow-900">{assignedTasks.length} | {currencySymbol}{assignedTasksAmount.toFixed(2)}</p>
               </div>
             </div>
           </div>
-          <div className="bg-green-50 rounded-lg p-4">
+          <div className="bg-blue-50 rounded-lg p-3">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <CheckCircle className="h-6 w-6 text-green-600" />
+                <Loader2 className="h-5 w-5 text-blue-600" />
               </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-green-900">Completed Tasks</p>
-                <p className="mt-1 text-2xl font-semibold text-green-900">{completedTasks.length}</p>
+              <div className="ml-2">
+                <p className="text-xs font-medium text-blue-900">In Progress</p>
+                <p className="mt-0.5 text-lg font-semibold text-blue-900">{inProgressTasks.length} | {currencySymbol}{inProgressTasksAmount.toFixed(2)}</p>
               </div>
             </div>
           </div>
-          <div className="bg-blue-50 rounded-lg p-4">
+          <div className="bg-green-50 rounded-lg p-3">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <DollarSign className="h-6 w-6 text-blue-600" />
+                <CheckCircle className="h-5 w-5 text-green-600" />
               </div>
-              <div className="ml-3">
-                <p className="text-sm font-medium text-blue-900">Total Earnings</p>
-                <p className="mt-1 text-2xl font-semibold text-blue-900">
+              <div className="ml-2">
+                <p className="text-xs font-medium text-green-900">Completed Tasks</p>
+                <p className="mt-0.5 text-lg font-semibold text-green-900">{completedTasks.length} | {currencySymbol}{completedTasksAmount.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-indigo-50 rounded-lg p-3">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <DollarSign className="h-5 w-5 text-indigo-600" />
+              </div>
+              <div className="ml-2">
+                <p className="text-xs font-medium text-indigo-900">Total Earnings</p>
+                <p className="mt-0.5 text-lg font-semibold text-indigo-900">
                   {currencySymbol} {totalEarnings.toFixed(2)}
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="bg-red-50 rounded-lg p-3">
+            <div className="flex items-center">
+              <div className="flex-shrink-0">
+                <DollarSign className="h-5 w-5 text-red-600" />
+              </div>
+              <div className="ml-2">
+                <p className="text-xs font-medium text-red-900">Loans Owed</p>
+                <p className="mt-0.5 text-lg font-semibold text-red-900">
+                  {currencySymbol} 0.00
                 </p>
               </div>
             </div>
