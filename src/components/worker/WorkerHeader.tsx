@@ -42,6 +42,21 @@ export default function WorkerHeader({
   const assignedTasks = tasks.filter(t => t.status === 'pending');
   const completedTasks = tasks.filter(t => t.status === 'completed');
 
+  // Calculate amounts for assigned and completed tasks
+  const assignedTasksAmount = assignedTasks.reduce((sum, task) => {
+    const deductions = task.deductions?.reduce((dSum, d) => dSum + d.amount, 0) || 0;
+    return sum + (task.amount - deductions);
+  }, 0);
+
+  const completedTasksAmount = completedTasks.reduce((sum, task) => {
+    const deductions = task.deductions?.reduce((dSum, d) => dSum + d.amount, 0) || 0;
+    return sum + (task.amount - deductions);
+  }, 0);
+
+  const totalEarnings = completedTasksAmount;
+
+  const currencySymbol = CURRENCIES[organization.currency]?.symbol || organization.currency;
+
   // Calculate completed earnings for the week from completed tasks only
   const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -145,13 +160,6 @@ export default function WorkerHeader({
       '_blank'
     );
   };
-
-  const completedEarnings = completedTasks.reduce((sum, task) => {
-    const deductions = task.deductions?.reduce((dSum, d) => dSum + d.amount, 0) || 0;
-    return sum + (task.amount - deductions);
-  }, 0);
-
-  const currencySymbol = CURRENCIES[organization.currency]?.symbol || organization.currency;
 
   return (
     <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -294,7 +302,8 @@ export default function WorkerHeader({
               </div>
               <div className="ml-3">
                 <p className="text-sm font-medium text-yellow-900">Assigned Tasks</p>
-                <p className="mt-1 text-2xl font-semibold text-yellow-900">{assignedTasks.length}</p>
+                <p className="mt-1 text-2xl font-semibold text-yellow-900">{assignedTasks.length} | {currencySymbol}{assignedTasksAmount.toFixed(2)}</p>
+                
               </div>
             </div>
           </div>
@@ -309,15 +318,15 @@ export default function WorkerHeader({
               </div>
             </div>
           </div>
-          <div className="bg-yellow-50 rounded-lg p-4">
+          <div className="bg-blue-50 rounded-lg p-4">
             <div className="flex items-center">
               <div className="flex-shrink-0">
-                <DollarSign className="h-6 w-6 text-yellow-600" />
+                <DollarSign className="h-6 w-6 text-blue-600" />
               </div>
               <div className="ml-3">
-                <p className="text-sm font-medium text-yellow-900">Completed Earnings</p>
-                <p className="mt-1 text-2xl font-semibold text-yellow-900">
-                  {currencySymbol} {completedEarnings.toFixed(2)}
+                <p className="text-sm font-medium text-blue-900">Total Earnings</p>
+                <p className="mt-1 text-2xl font-semibold text-blue-900">
+                  {currencySymbol} {totalEarnings.toFixed(2)}
                 </p>
               </div>
             </div>

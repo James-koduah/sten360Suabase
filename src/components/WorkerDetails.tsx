@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ChevronLeft, ChevronRight } from 'lucide-react';
-import { startOfWeek, endOfWeek, format, isAfter, getWeek, getYear } from 'date-fns';
+import { startOfWeek, endOfWeek, format, isAfter, getWeek, getYear, startOfMonth, endOfMonth, startOfYear, endOfYear, addWeeks, addMonths, addYears } from 'date-fns';
 import { supabase } from '../lib/supabase';
 import { useAuthStore } from '../stores/authStore';
 import { useUI } from '../context/UIContext';
@@ -22,24 +22,54 @@ export default function WorkerDetails() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedWorker, setEditedWorker] = useState<Worker | null>(null);
   const [workerProjects, setWorkerProjects] = useState<any[]>([]);
-  const [tasks, setTasks] = useState<any[]>([]);
+  const [allTasks, setAllTasks] = useState<any[]>([]);
+  const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
-  const weekStart = startOfWeek(currentDate, { weekStartsOn: 1 }); // Monday
-  const weekEnd = endOfWeek(currentDate, { weekStartsOn: 1 }); // Sunday
-  const now = new Date();
-  const currentWeek = getWeek(currentDate, { weekStartsOn: 1 });
-  const currentYear = getYear(currentDate);
-
+  const [dateFilterType, setDateFilterType] = useState<'week' | 'month' | 'year'>('week');
+  
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { organization } = useAuthStore();
   const { confirm, addToast } = useUI();
 
+  // Calculate date range based on filter type
+  const getDateRange = () => {
+    switch (dateFilterType) {
+      case 'week':
+        return {
+          start: startOfWeek(currentDate, { weekStartsOn: 1 }),
+          end: endOfWeek(currentDate, { weekStartsOn: 1 })
+        };
+      case 'month':
+        return {
+          start: startOfMonth(currentDate),
+          end: endOfMonth(currentDate)
+        };
+      case 'year':
+        return {
+          start: startOfYear(currentDate),
+          end: endOfYear(currentDate)
+        };
+    }
+  };
+
+  const { start: dateRangeStart, end: dateRangeEnd } = getDateRange();
+
   useEffect(() => {
     if (!organization || !id) return;
     loadData();
-  }, [id, organization, currentDate]);
+  }, [id, organization]);
+
+  useEffect(() => {
+    if (allTasks.length > 0) {
+      const filtered = allTasks.filter(task => {
+        const taskDate = new Date(task.created_at);
+        return taskDate >= dateRangeStart && taskDate <= dateRangeEnd;
+      });
+      setFilteredTasks(filtered);
+    }
+  }, [allTasks, dateRangeStart, dateRangeEnd]);
 
   const loadData = async () => {
     try {
@@ -75,7 +105,7 @@ export default function WorkerDetails() {
       if (workerProjectsError) throw workerProjectsError;
       setWorkerProjects(workerProjectsData || []);
 
-      // Load worker's tasks with deductions
+      // Load all worker's tasks with deductions
       const { data: tasksData, error: tasksError } = await supabase
         .from('tasks')
         .select(`
@@ -83,12 +113,11 @@ export default function WorkerDetails() {
           deductions (*)
         `)
         .eq('worker_id', id)
-        .gte('created_at', weekStart.toISOString())
-        .lte('created_at', weekEnd.toISOString())
         .order('created_at', { ascending: false });
 
       if (tasksError) throw tasksError;
-      setTasks(tasksData || []);
+      setAllTasks(tasksData || []);
+      setFilteredTasks(tasksData || []);
 
     } catch (error) {
       console.error('Error loading data:', error);
@@ -184,16 +213,40 @@ export default function WorkerDetails() {
     }
   };
 
-  const handleWeekChange = (direction: 'prev' | 'next') => {
+  const handleDateChange = (direction: 'prev' | 'next') => {
     setCurrentDate(prevDate => {
       const newDate = new Date(prevDate);
-      if (direction === 'prev') {
-        newDate.setDate(newDate.getDate() - 7);
-      } else {
-        newDate.setDate(newDate.getDate() + 7);
+      switch (dateFilterType) {
+        case 'week':
+          return direction === 'prev' ? addWeeks(newDate, -1) : addWeeks(newDate, 1);
+        case 'month':
+          return direction === 'prev' ? addMonths(newDate, -1) : addMonths(newDate, 1);
+        case 'year':
+          return direction === 'prev' ? addYears(newDate, -1) : addYears(newDate, 1);
       }
-      return newDate;
     });
+  };
+
+  const getDateRangeLabel = () => {
+    switch (dateFilterType) {
+      case 'week':
+        return `Week ${getWeek(currentDate, { weekStartsOn: 1 })}, ${getYear(currentDate)}`;
+      case 'month':
+        return format(currentDate, 'MMMM yyyy');
+      case 'year':
+        return format(currentDate, 'yyyy');
+    }
+  };
+
+  const getDateRangeSubtitle = () => {
+    switch (dateFilterType) {
+      case 'week':
+        return `${format(dateRangeStart, 'MMM d')} - ${format(dateRangeEnd, 'MMM d')}`;
+      case 'month':
+        return `${format(dateRangeStart, 'MMM d')} - ${format(dateRangeEnd, 'MMM d')}`;
+      case 'year':
+        return `${format(dateRangeStart, 'MMM d, yyyy')} - ${format(dateRangeEnd, 'MMM d, yyyy')}`;
+    }
   };
 
   if (isLoading) {
@@ -226,40 +279,19 @@ export default function WorkerDetails() {
 
   return (
     <div className="space-y-6">
-      <div className="bg-white shadow rounded-lg">
-        <div className="p-4 flex items-center justify-between">
-          <div className="flex items-center space-x-4">
-            <button
-              onClick={() => handleWeekChange('prev')}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
-            >
-              <ChevronLeft className="h-5 w-5 text-gray-600" />
-            </button>
-            <div className="text-sm">
-              <span className="font-medium text-gray-900">
-                Week {currentWeek}, {currentYear}
-              </span>
-              <p className="text-gray-500 text-xs mt-0.5">
-                {format(weekStart, 'MMM d')} - {format(weekEnd, 'MMM d')}
-              </p>
-            </div>
-            <button
-              onClick={() => handleWeekChange('next')}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
-              disabled={isAfter(weekEnd, now)}
-            >
-              <ChevronRight className="h-5 w-5 text-gray-600" />
-            </button>
-          </div>
-          <div className="text-sm text-gray-500">
-            {tasks.length} tasks this week
-          </div>
-        </div>
+      <div className="flex items-center">
+        <button
+          onClick={() => navigate('/dashboard/workers')}
+          className="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
+        >
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Workers
+        </button>
       </div>
 
       <WorkerHeader
         worker={worker}
-        tasks={tasks}
+        tasks={allTasks}
         workerProjects={workerProjects}
         isEditing={isEditing}
         setIsEditing={setIsEditing}
@@ -276,10 +308,52 @@ export default function WorkerDetails() {
         organization={organization}
       />
 
+      <div className="bg-white shadow rounded-lg">
+        <div className="p-4 flex items-center justify-between">
+          <div className="flex items-center space-x-4">
+            <button
+              onClick={() => handleDateChange('prev')}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+            >
+              <ChevronLeft className="h-5 w-5 text-gray-600" />
+            </button>
+            <div className="text-sm">
+              <div className="flex items-center space-x-2">
+                <span className="font-medium text-gray-900">
+                  {getDateRangeLabel()}
+                </span>
+                <select
+                  value={dateFilterType}
+                  onChange={(e) => setDateFilterType(e.target.value as 'week' | 'month' | 'year')}
+                  className="text-sm border rounded px-2 py-1"
+                >
+                  <option value="week">Week</option>
+                  <option value="month">Month</option>
+                  <option value="year">Year</option>
+                </select>
+              </div>
+              <p className="text-gray-500 text-xs mt-0.5">
+                {getDateRangeSubtitle()}
+              </p>
+            </div>
+            <button
+              onClick={() => handleDateChange('next')}
+              className="p-2 hover:bg-gray-100 rounded-full transition-colors duration-200"
+              disabled={isAfter(dateRangeEnd, new Date())}
+            >
+              <ChevronRight className="h-5 w-5 text-gray-600" />
+            </button>
+          </div>
+          <div className="text-sm text-gray-500">
+            {filteredTasks.length} tasks in this {dateFilterType}
+          </div>
+        </div>
+      </div>
+      
       <WorkerTasks
         worker={worker}
-        tasks={tasks}
-        setTasks={setTasks}
+        tasks={filteredTasks}
+        setTasks={setFilteredTasks}
         workerProjects={workerProjects}
         organization={organization}
       />

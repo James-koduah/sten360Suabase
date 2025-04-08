@@ -13,11 +13,13 @@ interface Worker {
   whatsapp: string | null;
   image: string | null;
   stats?: {
-    completedEarnings: number;
+    totalEarnings: number;
     weeklyProjectTotal: number;
     allTimeTasks: number;
     weeklyTasks: number;
     dailyTasks: number;
+    assignedTasks: number;
+    completedTasks: number;
   };
 }
 
@@ -70,29 +72,31 @@ export default function WorkersList() {
   const { confirm, addToast } = useUI();
   const currencySymbol = CURRENCIES[organization.currency]?.symbol || organization.currency;
 
+  const validateFile = (file: File): string | null => {
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
+    if (!allowedTypes.includes(file.type)) {
+      return 'Please upload a JPG, JPEG, or PNG file';
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      return 'Image must be less than 5MB';
+    }
+
+    return null;
+  };
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      // Validate file type
-      const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png'];
-      if (!allowedTypes.includes(file.type)) {
+      const error = validateFile(file);
+      if (error) {
         addToast({
           type: 'error',
-          title: 'Invalid File Type',
-          message: 'Please upload a JPG, JPEG, or PNG file'
+          title: 'Invalid File',
+          message: error
         });
         return;
       }
-
-      if (file.size > 5 * 1024 * 1024) {
-        addToast({
-          type: 'error',
-          title: 'File Too Large',
-          message: 'Image must be less than 5MB'
-        });
-        return;
-      }
-
       setSelectedFile(file);
     }
   };
@@ -102,59 +106,60 @@ export default function WorkersList() {
 
     try {
       setIsLoading(true);
-      const { data: workersData, error: workersError } = await supabase
-        .from('workers')
-        .select('*')
-        .eq('organization_id', organization.id)
-        .order('name');
-
-      if (workersError) throw workersError;
-
       const now = new Date();
       const weekStart = startOfWeek(now, { weekStartsOn: 1 }); // Monday
       const weekEnd = endOfWeek(now, { weekStartsOn: 1 }); // Sunday
       const dayStart = startOfDay(now);
       const dayEnd = endOfDay(now);
 
-      // Load tasks and deductions for all workers
-      const { data: tasksData, error: tasksError } = await supabase
-        .from('tasks')
-        .select(`
-          *,
-          deductions (
-            amount
-          )
-        `)
-        .eq('organization_id', organization.id);
+      // Load workers and tasks in parallel
+      const [workersResponse, tasksResponse] = await Promise.all([
+        supabase
+          .from('workers')
+          .select('*')
+          .eq('organization_id', organization.id)
+          .order('name'),
+        supabase
+          .from('tasks')
+          .select(`
+            *,
+            deductions (
+              amount
+            )
+          `)
+          .eq('organization_id', organization.id)
+      ]);
 
-      if (tasksError) throw tasksError;
+      if (workersResponse.error) throw workersResponse.error;
+      if (tasksResponse.error) throw tasksResponse.error;
 
-      const workersWithStats = workersData?.map(worker => {
-        const workerTasks = tasksData?.filter(task => task.worker_id === worker.id) || [];
+      const workersWithStats = workersResponse.data?.map(worker => {
+        const workerTasks = tasksResponse.data?.filter(task => task.worker_id === worker.id) || [];
         
         // Filter tasks for current week
         const weeklyTasks = workerTasks.filter(task => 
           isWithinInterval(new Date(task.created_at), { start: weekStart, end: weekEnd })
         );
 
-        // Get weekly completed and assigned tasks
+        // Get completed tasks (all time and weekly)
+        const allCompletedTasks = workerTasks.filter(task => task.status === 'completed');
         const weeklyCompletedTasks = weeklyTasks.filter(task => task.status === 'completed');
         const weeklyAssignedTasks = weeklyTasks.filter(task => task.status === 'pending');
         
-        // Calculate weekly completed earnings (only from completed tasks)
-        const completedEarnings = weeklyCompletedTasks.reduce((sum, task) => {
-          const deductionsTotal = task.deductions?.reduce((dSum, d) => dSum + (d.amount || 0), 0) || 0;
-          return sum + (task.amount - deductionsTotal);
-        }, 0);
+        // Helper function to calculate deductions
+        const calculateDeductions = (task: Task) => {
+          return task.deductions?.reduce((sum, deduction) => sum + (deduction.amount || 0), 0) || 0;
+        };
+        
+        // Calculate earnings (all time and weekly)
+        const totalEarnings = allCompletedTasks.reduce((sum, task) => 
+          sum + (task.amount - calculateDeductions(task)), 0);
 
-        // Calculate weekly project total (total amount for all tasks this week)
-        const weeklyProjectTotal = weeklyTasks.reduce((sum, task) => {
-          const deductionsTotal = task.deductions?.reduce((dSum, d) => dSum + (d.amount || 0), 0) || 0;
-          return sum + (task.amount - deductionsTotal);
-        }, 0);
+        const weeklyProjectTotal = weeklyTasks.reduce((sum, task) => 
+          sum + (task.amount - calculateDeductions(task)), 0);
 
         const stats = {
-          completedEarnings,
+          totalEarnings,
           weeklyProjectTotal,
           assignedTasks: weeklyAssignedTasks.length,
           completedTasks: weeklyCompletedTasks.length,
@@ -171,6 +176,11 @@ export default function WorkersList() {
       setWorkers(workersWithStats);
     } catch (error) {
       console.error('Error loading workers:', error);
+      addToast({
+        type: 'error',
+        title: 'Error',
+        message: 'Failed to load workers. Please try again.'
+      });
     } finally {
       setIsLoading(false);
     }
@@ -189,16 +199,16 @@ export default function WorkersList() {
 
       // Upload image if selected
       if (selectedFile) {
-        // Validate file extension
-        const fileExt = selectedFile.name.split('.').pop()?.toLowerCase();
-        if (!fileExt || !['jpg', 'jpeg', 'png'].includes(fileExt)) {
-          throw new Error('Invalid file extension');
+        const error = validateFile(selectedFile);
+        if (error) {
+          throw new Error(error);
         }
 
+        const fileExt = selectedFile.name.split('.').pop()?.toLowerCase();
         const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
         const filePath = `${organization.id}/${fileName}`;
 
-        const { error: uploadError, data } = await supabase.storage
+        const { error: uploadError } = await supabase.storage
           .from('profiles')
           .upload(filePath, selectedFile, {
             contentType: selectedFile.type,
@@ -231,7 +241,7 @@ export default function WorkersList() {
       if (error) throw error;
 
       setWorkers(prev => [...prev, { ...data, stats: {
-        completedEarnings: 0,
+        totalEarnings: 0,
         weeklyProjectTotal: 0,
         assignedTasks: 0,
         completedTasks: 0,
@@ -473,7 +483,7 @@ export default function WorkersList() {
                     <div className="mt-6 space-y-4">
                       <div className="space-y-2">
                         <p className="text-sm text-green-600 font-medium">
-                          Completed Earnings: {currencySymbol} {worker.stats?.completedEarnings.toFixed(2)}
+                          Total Earnings: {currencySymbol} {worker.stats?.totalEarnings.toFixed(2)}
                         </p>
                         <p className="text-sm text-blue-600 font-medium">
                           Weekly Project Total: {currencySymbol} {worker.stats?.weeklyProjectTotal.toFixed(2)}
