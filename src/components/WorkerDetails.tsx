@@ -348,6 +348,40 @@ export default function WorkerDetails() {
             {filteredTasks.length} tasks in this {dateFilterType}
           </div>
         </div>
+
+        {/* Summary Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 p-3 border-t">
+          <div className="bg-yellow-50 p-3 rounded-lg">
+            <h3 className="text-xs font-medium text-yellow-800">Assigned Tasks</h3>
+            <p className="text-xl font-bold text-yellow-600 mt-1">
+              {filteredTasks.length}
+            </p>
+          </div>
+          <div className="bg-blue-50 p-3 rounded-lg">
+            <h3 className="text-xs font-medium text-blue-800">In Progress</h3>
+            <p className="text-xl font-bold text-blue-600 mt-1">
+              {filteredTasks.filter(task => task.status === 'in_progress').length}
+            </p>
+          </div>
+          <div className="bg-green-50 p-3 rounded-lg">
+            <h3 className="text-xs font-medium text-green-800">Completed</h3>
+            <p className="text-xl font-bold text-green-600 mt-1">
+              {filteredTasks.filter(task => task.status === 'completed').length}
+            </p>
+          </div>
+          <div className="bg-indigo-50 p-3 rounded-lg">
+            <h3 className="text-xs font-medium text-indigo-800">Total Earnings</h3>
+            <p className="text-xl font-bold text-indigo-600 mt-1">
+              ${filteredTasks
+                .filter(task => task.status === 'completed')
+                .reduce((total, task) => {
+                  const project = workerProjects.find(p => p.project_id === task.project_id);
+                  return total + (project?.rate || 0);
+                }, 0)
+                .toFixed(2)}
+            </p>
+          </div>
+        </div>
       </div>
       
       <WorkerTasks
