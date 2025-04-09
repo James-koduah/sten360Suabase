@@ -86,6 +86,16 @@ interface OutstandingItem {
   created_at: string;
 }
 
+interface OrderWithClient {
+  id: string;
+  order_number: string;
+  outstanding_balance: number;
+  created_at: string;
+  client: {
+    name: string;
+  };
+}
+
 const RecordPaymentModal = ({ isOpen, onClose, onPaymentRecorded, orderId, outstandingBalance, referenceType }: RecordPaymentModalProps) => {
   const { addToast } = useUI();
   const { organization } = useAuthStore();
@@ -597,7 +607,7 @@ export default function DashboardOverview() {
           order_number,
           outstanding_balance,
           created_at,
-          clients (
+          client:clients!client_id (
             name
           )
         `)
@@ -615,7 +625,7 @@ export default function DashboardOverview() {
           order_number,
           outstanding_balance,
           created_at,
-          clients (
+          client:clients!client_id (
             name
           )
         `)
@@ -627,19 +637,19 @@ export default function DashboardOverview() {
 
       // Transform and combine the data
       const items: OutstandingItem[] = [
-        ...(salesOrders || []).map(order => ({
+        ...(salesOrders as OrderWithClient[] || []).map(order => ({
           id: order.id,
           type: 'sales_order' as const,
           number: order.order_number,
-          client_name: order.clients?.[0]?.name || 'N/A',
+          client_name: order.client?.name || 'N/A',
           outstanding_balance: order.outstanding_balance,
           created_at: order.created_at
         })),
-        ...(serviceOrders || []).map(order => ({
+        ...(serviceOrders as OrderWithClient[] || []).map(order => ({
           id: order.id,
           type: 'service_order' as const,
           number: order.order_number,
-          client_name: order.clients?.[0]?.name || 'N/A',
+          client_name: order.client?.name || 'N/A',
           outstanding_balance: order.outstanding_balance,
           created_at: order.created_at
         }))

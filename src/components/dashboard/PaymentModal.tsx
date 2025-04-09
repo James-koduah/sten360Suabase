@@ -254,6 +254,9 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
                           <p className="text-sm font-medium text-gray-900">
                             {item.type === 'sales_order' ? 'Sales Order' : 'Service Order'} #{item.number}
                           </p>
+                          <p className="text-sm text-gray-500">
+                            {item.client_name}
+                          </p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-medium text-gray-900">
