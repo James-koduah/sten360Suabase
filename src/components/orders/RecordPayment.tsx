@@ -134,7 +134,7 @@ export const RecordPayment = ({ orderId, outstandingBalance, onPaymentRecorded }
                       max={outstandingBalance}
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
-                      className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
+                      className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md h-[35px] px-3"
                       placeholder="0.00"
                       required
                     />
@@ -151,7 +151,7 @@ export const RecordPayment = ({ orderId, outstandingBalance, onPaymentRecorded }
                   <select
                     value={paymentMethod}
                     onChange={(e) => setPaymentMethod(e.target.value)}
-                    className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                    className="mt-1 block w-full pl-3 pr-10 h-[35px] px-3 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
                     required
                   >
                     <option value="">Select a payment method</option>
@@ -171,7 +171,7 @@ export const RecordPayment = ({ orderId, outstandingBalance, onPaymentRecorded }
                     type="text"
                     value={paymentReference}
                     onChange={(e) => setPaymentReference(e.target.value)}
-                    className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                    className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md h-[35px] px-3"
                     placeholder="e.g., Check number, Transaction ID"
                   />
                 </div>
