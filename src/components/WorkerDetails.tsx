@@ -8,6 +8,7 @@ import { useUI } from '../context/UIContext';
 import WorkerHeader from './worker/WorkerHeader';
 import WorkerProjects from './worker/WorkerProjects';
 import WorkerTasks from './worker/WorkerTasks';
+import { CURRENCIES } from '../utils/constants';
 
 interface Worker {
   id: string;
@@ -22,8 +23,7 @@ export default function WorkerDetails() {
   const [isEditing, setIsEditing] = useState(false);
   const [editedWorker, setEditedWorker] = useState<Worker | null>(null);
   const [workerProjects, setWorkerProjects] = useState<any[]>([]);
-  const [allTasks, setAllTasks] = useState<any[]>([]);
-  const [filteredTasks, setFilteredTasks] = useState<any[]>([]);
+  const [tasks, setTasks] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [currentDate, setCurrentDate] = useState(new Date());
   const [dateFilterType, setDateFilterType] = useState<'week' | 'month' | 'year'>('week');
@@ -32,6 +32,7 @@ export default function WorkerDetails() {
   const navigate = useNavigate();
   const { organization } = useAuthStore();
   const { confirm, addToast } = useUI();
+  const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : CURRENCIES['USD'].symbol;
 
   // Calculate date range based on filter type
   const getDateRange = () => {
@@ -56,20 +57,16 @@ export default function WorkerDetails() {
 
   const { start: dateRangeStart, end: dateRangeEnd } = getDateRange();
 
+  // Filter tasks based on current date range
+  const filteredTasks = tasks.filter(task => {
+    const taskDate = new Date(task.created_at);
+    return taskDate >= dateRangeStart && taskDate <= dateRangeEnd;
+  });
+
   useEffect(() => {
     if (!organization || !id) return;
     loadData();
   }, [id, organization]);
-
-  useEffect(() => {
-    if (allTasks.length > 0) {
-      const filtered = allTasks.filter(task => {
-        const taskDate = new Date(task.created_at);
-        return taskDate >= dateRangeStart && taskDate <= dateRangeEnd;
-      });
-      setFilteredTasks(filtered);
-    }
-  }, [allTasks, dateRangeStart, dateRangeEnd]);
 
   const loadData = async () => {
     try {
@@ -116,8 +113,7 @@ export default function WorkerDetails() {
         .order('created_at', { ascending: false });
 
       if (tasksError) throw tasksError;
-      setAllTasks(tasksData || []);
-      setFilteredTasks(tasksData || []);
+      setTasks(tasksData || []);
 
     } catch (error) {
       console.error('Error loading data:', error);
@@ -291,7 +287,7 @@ export default function WorkerDetails() {
 
       <WorkerHeader
         worker={worker}
-        tasks={allTasks}
+        tasks={tasks}
         workerProjects={workerProjects}
         isEditing={isEditing}
         setIsEditing={setIsEditing}
@@ -372,7 +368,7 @@ export default function WorkerDetails() {
           <div className="bg-indigo-50 p-3 rounded-lg">
             <h3 className="text-xs font-medium text-indigo-800">Total Earnings</h3>
             <p className="text-xl font-bold text-indigo-600 mt-1">
-              ${filteredTasks
+              {currencySymbol}{filteredTasks
                 .filter(task => task.status === 'completed')
                 .reduce((total, task) => {
                   const project = workerProjects.find(p => p.project_id === task.project_id);
@@ -387,7 +383,7 @@ export default function WorkerDetails() {
       <WorkerTasks
         worker={worker}
         tasks={filteredTasks}
-        setTasks={setFilteredTasks}
+        setTasks={setTasks}
         workerProjects={workerProjects}
         organization={organization}
       />
