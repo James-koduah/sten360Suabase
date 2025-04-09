@@ -4,7 +4,8 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
 import { CURRENCIES } from '../../utils/constants';
 import { format } from 'date-fns';
-import { Plus, Minus, X, User, FileText, Calendar, CreditCard, DollarSign, Printer } from 'lucide-react';
+import { Plus, Minus, X, User, FileText, Calendar, CreditCard, DollarSign } from 'lucide-react';
+import OrderReceipt from './OrderReceipt';
 
 interface Client {
   id: string;
@@ -36,234 +37,6 @@ interface OrderService {
 interface CreateOrderFormProps {
   onClose: () => void;
   onSuccess: () => void;
-}
-
-interface OrderSummaryProps {
-  orderData: any;
-  selectedClient: Client;
-  selectedServices: OrderService[];
-  selectedWorkers: { worker_id: string; project_id: string }[];
-  formData: any;
-  currencySymbol: string;
-  onClose: () => void;
-  workers: Worker[];
-  workerProjects: {[key: string]: any[]};
-}
-
-function OrderSummary({ orderData, selectedClient, selectedServices, selectedWorkers, formData, currencySymbol, onClose, workers, workerProjects }: OrderSummaryProps) {
-  const totalAmount = selectedServices.reduce(
-    (sum, { service, quantity }) => sum + (service.cost * quantity),
-    0
-  );
-
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const receiptContent = [
-    {
-      text: "Order Number:",
-      main: orderData.order_number,
-      icon: "fa fa-list-alt"
-    },
-    {
-      text: "Client:",
-      main: selectedClient.name,
-      icon: "fa fa-user"
-    },
-    {
-      text: "Total Amount:",
-      main: `${currencySymbol} ${totalAmount.toFixed(2)}`,
-      icon: "fa fa-money"
-    },
-    {
-      text: "Due Date:",
-      main: formData.due_date ? format(new Date(formData.due_date), 'dd/MM/yyyy') : 'N/A',
-      icon: "fa fa-calendar"
-    }
-  ];
-
-  if (formData.initial_payment > 0) {
-    receiptContent.push(
-      {
-        text: "Initial Payment:",
-        main: `${currencySymbol} ${formData.initial_payment.toFixed(2)}`,
-        icon: "fa fa-credit-card"
-      },
-      {
-        text: "Payment Method:",
-        main: formData.payment_method.charAt(0).toUpperCase() + formData.payment_method.slice(1).replace('_', ' '),
-        icon: "fa fa-credit-card"
-      },
-      {
-        text: "Outstanding Balance:",
-        main: `${currencySymbol} ${(totalAmount - formData.initial_payment).toFixed(2)}`,
-        icon: "fa fa-balance-scale"
-      }
-    );
-  }
-
-  return (
-    <div className="bg-white rounded-lg shadow-xl max-w-[57mm] w-full mx-auto overflow-y-auto max-h-[90vh] border border-gray-100">
-      <div className="px-4 py-6">
-        <div className="flex items-center justify-between mb-4">
-          <button
-            onClick={handlePrint}
-            className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-          >
-            <Printer className="h-4 w-4 mr-2" />
-            Print
-          </button>
-          <button
-            onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-500 hover:bg-white rounded-full transition-colors duration-200"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="print:block hidden">
-          <style>
-            {`
-              @media print {
-                @page {
-                  size: 57mm 50mm;
-                  margin: 0;
-                }
-                body {
-                  width: 57mm;
-                  margin: 0;
-                  padding: 0;
-                  font-family: monospace;
-                  font-size: 7pt;
-                  line-height: 1.2;
-                }
-                .no-print {
-                  display: none !important;
-                }
-                .receipt-content {
-                  padding: 1mm;
-                }
-                .receipt-header {
-                  text-align: center;
-                  margin-bottom: 1mm;
-                  padding-bottom: 1mm;
-                  border-bottom: 1px solid #000;
-                }
-                .receipt-title {
-                  font-size: 12pt;
-                  font-weight: bold;
-                  letter-spacing: 0.5pt;
-                }
-                .receipt-divider {
-                  border-top: 1px solid #000;
-                  margin: 0.5mm 0;
-                }
-                .receipt-row {
-                  display: flex;
-                  justify-content: space-between;
-                  margin: 0.3mm 0;
-                  white-space: nowrap;
-                  overflow: hidden;
-                  text-overflow: ellipsis;
-                }
-                .receipt-label {
-                  font-weight: bold;
-                  margin-right: 1mm;
-                }
-                .receipt-value {
-                  text-align: right;
-                }
-                .receipt-total {
-                  font-weight: bold;
-                  font-size: 8pt;
-                  margin-top: 0.5mm;
-                }
-                .receipt-service {
-                  margin: 0.2mm 0;
-                }
-                .receipt-service-name {
-                  margin-right: 1mm;
-                }
-                .receipt-service-quantity {
-                  color: #666;
-                }
-                .receipt-footer {
-                  text-align: center;
-                  margin-top: 1mm;
-                  padding-top: 1mm;
-                  border-top: 1px solid #000;
-                  font-size: 6pt;
-                  color: #666;
-                }
-              }
-            `}
-          </style>
-        </div>
-
-        <div className="receipt-content">
-          {/* Organization Name */}
-          <div className="receipt-header">
-            <div className="receipt-title">STEN360</div>
-          </div>
-
-          {/* Receipt Breakdown */}
-          <div className="receipt-breakdown">
-            <div className="receipt-breakdown--header mb-4">
-              <p className="text-sm text-gray-500">Receipt for</p>
-              <h2 className="text-xl font-bold text-gray-900">{selectedClient.name}</h2>
-            </div>
-            
-            <ul className="space-y-3">
-              {receiptContent.map((item, index) => (
-                <li key={index} className="flex items-start space-x-3">
-                  <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                    <i className={`${item.icon} text-blue-600`}></i>
-                  </div>
-                  <div className="flex-1">
-                    <p className="text-sm text-gray-600">{item.text}</p>
-                    <p className="text-sm font-medium text-gray-900">{item.main}</p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-
-          {/* Services Section */}
-          <div className="mt-6">
-            <h3 className="text-sm font-medium text-gray-900 mb-3">Services</h3>
-            <div className="space-y-2">
-              {selectedServices.map(({ service, quantity }) => (
-                <div key={service.id} className="flex justify-between items-center">
-                  <div>
-                    <p className="text-sm text-gray-900">{service.name}</p>
-                    <p className="text-xs text-gray-500">x{quantity}</p>
-                  </div>
-                  <p className="text-sm font-medium text-gray-900">
-                    {currencySymbol} {(service.cost * quantity).toFixed(2)}
-                  </p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Description */}
-          {formData.description && (
-            <div className="mt-6">
-              <h3 className="text-sm font-medium text-gray-900 mb-3">Description</h3>
-              <p className="text-sm text-gray-600">{formData.description}</p>
-            </div>
-          )}
-
-          {/* Footer */}
-          <div className="mt-8 text-center">
-            <p className="text-sm text-gray-500">Thank you for your business!</p>
-            <p className="text-xs text-gray-400 mt-2">Generated on {format(new Date(), 'dd/MM/yyyy HH:mm')}</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormProps) {
@@ -500,7 +273,7 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
 
   if (showOrderSummary && createdOrder) {
     return (
-      <OrderSummary
+      <OrderReceipt
         orderData={createdOrder}
         selectedClient={selectedClient!}
         selectedServices={selectedServices}
@@ -513,6 +286,8 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
         }}
         workers={workers}
         workerProjects={workerProjects}
+        organizationName={organization?.name || 'Organization'}
+        organizationAddress={organization?.address}
       />
     );
   }
