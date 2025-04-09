@@ -4,19 +4,21 @@ import { X } from 'lucide-react';
 interface CancelOrderModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onConfirm: (reason: string) => void;
+  onConfirm: (reason: string, cancelWorkerTasks: boolean) => void;
 }
 
 export function CancelOrderModal({ isOpen, onClose, onConfirm }: CancelOrderModalProps) {
   const [reason, setReason] = useState('');
+  const [cancelWorkerTasks, setCancelWorkerTasks] = useState(false);
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (reason.trim()) {
-      onConfirm(reason);
+      onConfirm(reason, cancelWorkerTasks);
       setReason('');
+      setCancelWorkerTasks(false);
     }
   };
 
@@ -47,6 +49,18 @@ export function CancelOrderModal({ isOpen, onClose, onConfirm }: CancelOrderModa
               placeholder="Please provide a reason for cancelling this order..."
               required
             />
+          </div>
+
+          <div className="mb-4">
+            <label className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                checked={cancelWorkerTasks}
+                onChange={(e) => setCancelWorkerTasks(e.target.checked)}
+                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              />
+              <span className="text-sm text-gray-700">Also cancel all worker tasks associated with this order</span>
+            </label>
           </div>
           
           <div className="flex justify-end space-x-3">

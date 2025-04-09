@@ -14,21 +14,23 @@ import { LucideIcon } from 'lucide-react';
 import { RecordPayment } from './RecordPayment';
 import { CancelOrderModal } from './CancelOrderModal';
 
-type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'delayed';
+type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'delayed' | 'cancelled';
 type OrderStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
 
 const TASK_STATUS_LABELS: Record<TaskStatus, string> = {
   pending: 'Pending',
   in_progress: 'In Progress',
   completed: 'Completed',
-  delayed: 'Delayed'
+  delayed: 'Delayed',
+  cancelled: 'Cancelled'
 };
 
 const TASK_STATUS_COLORS: Record<TaskStatus, string> = {
   pending: 'bg-yellow-100 text-yellow-800 border-yellow-200',
   in_progress: 'bg-blue-100 text-blue-800 border-blue-200',
   completed: 'bg-green-100 text-green-800 border-green-200',
-  delayed: 'bg-red-100 text-red-800 border-red-200'
+  delayed: 'bg-red-100 text-red-800 border-red-200',
+  cancelled: 'bg-red-100 text-red-800 border-red-200'
 };
 
 const ORDER_STATUS_LABELS: Record<OrderStatus, string> = {
@@ -234,47 +236,59 @@ export default function OrderDetails() {
     }
   };
 
-  const handleDeleteOrder = async (orderId: string, cancellationReason: string) => {
+  const handleDeleteOrder = async (reason: string, cancelWorkerTasks: boolean) => {
+    if (!order) return;
+
     try {
-      // Start a transaction to update both order and worker statuses
+      // Update order status to cancelled
       const { error: orderError } = await supabase
         .from('orders')
         .update({ 
-          status: 'cancelled',
-          payment_status: 'cancelled',
+          status: 'cancelled', 
+          cancellation_reason: reason,
           cancelled_at: new Date().toISOString(),
-          cancelled_by: organization?.id,
-          cancellation_reason: cancellationReason
+          cancelled_by: organization?.id || null
         })
-        .eq('id', orderId);
+        .eq('id', order.id);
 
       if (orderError) throw orderError;
 
-      // Update all worker tasks to cancelled status
-      const { error: workersError } = await supabase
-        .from('order_workers')
+      // Only update worker tasks if the user chose to do so
+      if (cancelWorkerTasks) {
+        const { error: taskError } = await supabase
+          .from('tasks')
+          .update({ status: 'cancelled' })
+          .eq('order_id', order.id);
+
+        if (taskError) throw taskError;
+      }
+
+      // Update all associated payments to cancelled status
+      const { error: paymentsError } = await supabase
+        .from('payments')
         .update({ 
           status: 'cancelled'
         })
-        .eq('order_id', orderId);
+        .eq('reference_type', 'service_order')
+        .eq('reference_id', order.id);
 
-      if (workersError) throw workersError;
-
+      if (paymentsError) throw paymentsError;
+      // Refresh the order details
+      await loadOrderDetails();
+      
       addToast({
         type: 'success',
         title: 'Order Cancelled',
-        message: 'The order and all associated worker tasks have been cancelled successfully.'
+        message: 'The order and all associated worker tasks and payments have been cancelled successfully.'
       });
       
-      // Refresh the order details to show updated status
-      loadOrderDetails();
       setIsCancelModalOpen(false);
     } catch (error) {
       console.error('Error cancelling order:', error);
       addToast({
         type: 'error',
         title: 'Error',
-        message: 'Failed to cancel order. Please try again.'
+        message: 'Failed to cancel the order'
       });
     }
   };
@@ -559,22 +573,22 @@ export default function OrderDetails() {
                 </div>
 
                 {/* Payment History */}
-                <div className="mt-4">
+                <div>
                   <h4 className="text-sm font-semibold text-gray-900 mb-3">Payment History</h4>
                   {order?.payments && order.payments.length > 0 ? (
                     <div className="border rounded-lg divide-y">
                       {order.payments.map(payment => (
-                        <div key={payment.id} className="p-4 flex items-center justify-between">
+                        <div key={payment.id} className={`p-4 flex items-center justify-between ${order.status === 'cancelled' ? 'opacity-75' : ''}`}>
                           <div>
-                            <p className="text-sm font-medium text-gray-900">
+                            <p className={`text-sm font-medium ${order.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
                               {currencySymbol} {payment.amount.toFixed(2)}
                             </p>
-                            <p className="text-xs text-gray-500 mt-1">
+                            <p className={`text-xs mt-1 ${order.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}`}>
                               {payment.payment_method} • {payment.payment_reference}
                             </p>
                           </div>
                           <div className="text-right">
-                            <p className="text-xs text-gray-500">
+                            <p className={`text-xs ${order.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}`}>
                               {format(new Date(payment.created_at), 'MMM d, yyyy h:mm a')}
                             </p>
                           </div>
@@ -628,49 +642,56 @@ export default function OrderDetails() {
                           {workerTasks.length > 0 && (
                             <div className="space-y-3">
                               {workerTasks.map(task => (
-                                <div key={task.id} className="pt-3">
+                                <div key={task.id} className={`pt-3 ${task.status === 'cancelled' ? 'opacity-75' : ''}`}>
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
                                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                         ${task.status === 'completed' ? 'bg-green-100 text-green-800' :
                                           task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
                                           task.status === 'delayed' ? 'bg-red-100 text-red-800' :
+                                          task.status === 'cancelled' ? 'bg-gray-100 text-gray-800' :
                                           'bg-yellow-100 text-yellow-800'}`}>
                                         {TASK_STATUS_LABELS[task.status]}
                                       </span>
-                                      <span className="text-sm text-gray-500">
+                                      <span className={`text-sm ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}`}>
                                         {format(new Date(task.created_at), 'MMM d, yyyy')}
                                       </span>
                                     </div>
                                     <div className="relative">
-                                      <select
-                                        value={task.status}
-                                        onChange={(e) => {
-                                          const newStatus = e.target.value as TaskStatus;
-                                          handleStatusChange(task, newStatus);
-                                        }}
-                                        className="appearance-none bg-white border border-gray-300 rounded-md py-1 pl-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                      >
-                                        <option value="pending">Pending</option>
-                                        <option value="in_progress">In Progress</option>
-                                        <option value="delayed">Delayed</option>
-                                        <option value="completed">Completed</option>
-                                      </select>
-                                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                                        </svg>
-                                      </div>
+                                      {task.status !== 'cancelled' && (
+                                        <select
+                                          value={task.status}
+                                          onChange={(e) => {
+                                            const newStatus = e.target.value as TaskStatus;
+                                            handleStatusChange(task, newStatus);
+                                          }}
+                                          className="appearance-none bg-white border border-gray-300 rounded-md py-1 pl-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        >
+                                          <option value="pending">Pending</option>
+                                          <option value="in_progress">In Progress</option>
+                                          <option value="delayed">Delayed</option>
+                                          <option value="completed">Completed</option>
+                                        </select>
+                                      )}
+                                      {task.status !== 'cancelled' && (
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                          </svg>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                   {task.description && (
-                                    <p className="mt-1 text-sm text-gray-600">{task.description}</p>
+                                    <p className={`mt-1 text-sm ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-600'}`}>
+                                      {task.description}
+                                    </p>
                                   )}
                                   {task.delay_reason && (
                                     <p className="mt-1 text-sm text-red-600">Delay reason: {task.delay_reason}</p>
                                   )}
                                   {task.completed_at && (
-                                    <p className="mt-1 text-sm text-gray-500">
+                                    <p className={`mt-1 text-sm ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}`}>
                                       Completed: {format(new Date(task.completed_at), 'MMM d, yyyy HH:mm')}
                                     </p>
                                   )}
@@ -728,49 +749,56 @@ export default function OrderDetails() {
                           {workerTasks.length > 0 && (
                             <div className="space-y-3">
                               {workerTasks.map(task => (
-                                <div key={task.id} className="pt-3">
+                                <div key={task.id} className={`pt-3 ${task.status === 'cancelled' ? 'opacity-75' : ''}`}>
                                   <div className="flex items-center justify-between">
                                     <div className="flex items-center space-x-2">
                                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
                                         ${task.status === 'completed' ? 'bg-green-100 text-green-800' :
                                           task.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
                                           task.status === 'delayed' ? 'bg-red-100 text-red-800' :
+                                          task.status === 'cancelled' ? 'bg-gray-100 text-gray-800' :
                                           'bg-yellow-100 text-yellow-800'}`}>
                                         {TASK_STATUS_LABELS[task.status]}
                                       </span>
-                                      <span className="text-sm text-gray-500">
+                                      <span className={`text-sm ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}`}>
                                         {format(new Date(task.created_at), 'MMM d, yyyy')}
                                       </span>
                                     </div>
                                     <div className="relative">
-                                      <select
-                                        value={task.status}
-                                        onChange={(e) => {
-                                          const newStatus = e.target.value as TaskStatus;
-                                          handleStatusChange(task, newStatus);
-                                        }}
-                                        className="appearance-none bg-white border border-gray-300 rounded-md py-1 pl-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                      >
-                                        <option value="pending">Pending</option>
-                                        <option value="in_progress">In Progress</option>
-                                        <option value="delayed">Delayed</option>
-                                        <option value="completed">Completed</option>
-                                      </select>
-                                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
-                                        <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
-                                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                                        </svg>
-                                      </div>
+                                      {task.status !== 'cancelled' && (
+                                        <select
+                                          value={task.status}
+                                          onChange={(e) => {
+                                            const newStatus = e.target.value as TaskStatus;
+                                            handleStatusChange(task, newStatus);
+                                          }}
+                                          className="appearance-none bg-white border border-gray-300 rounded-md py-1 pl-2 pr-8 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        >
+                                          <option value="pending">Pending</option>
+                                          <option value="in_progress">In Progress</option>
+                                          <option value="delayed">Delayed</option>
+                                          <option value="completed">Completed</option>
+                                        </select>
+                                      )}
+                                      {task.status !== 'cancelled' && (
+                                        <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-gray-500">
+                                          <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                                          </svg>
+                                        </div>
+                                      )}
                                     </div>
                                   </div>
                                   {task.description && (
-                                    <p className="mt-1 text-sm text-gray-600">{task.description}</p>
+                                    <p className={`mt-1 text-sm ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-600'}`}>
+                                      {task.description}
+                                    </p>
                                   )}
                                   {task.delay_reason && (
                                     <p className="mt-1 text-sm text-red-600">Delay reason: {task.delay_reason}</p>
                                   )}
                                   {task.completed_at && (
-                                    <p className="mt-1 text-sm text-gray-500">
+                                    <p className={`mt-1 text-sm ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}`}>
                                       Completed: {format(new Date(task.completed_at), 'MMM d, yyyy HH:mm')}
                                     </p>
                                   )}
@@ -881,7 +909,7 @@ export default function OrderDetails() {
       <CancelOrderModal
         isOpen={isCancelModalOpen}
         onClose={() => setIsCancelModalOpen(false)}
-        onConfirm={(reason) => handleDeleteOrder(order?.id || '', reason)}
+        onConfirm={(reason: string, cancelWorkerTasks: boolean) => handleDeleteOrder(reason, cancelWorkerTasks)}
       />
 
       {/* Delay Reason Modal */}

@@ -19,7 +19,8 @@ const STATUS_LABELS = {
   pending: 'Pending',
   in_progress: 'In Progress',
   completed: 'Completed',
-  delayed: 'Delayed'
+  delayed: 'Delayed',
+  cancelled: 'Cancelled'
 } as const;
 
 const STATUS_COLORS = {
@@ -42,6 +43,11 @@ const STATUS_COLORS = {
     bg: 'bg-red-100',
     text: 'text-red-800',
     hover: 'hover:bg-red-200'
+  },
+  cancelled: {
+    bg: 'bg-gray-100',
+    text: 'text-gray-800',
+    hover: 'hover:bg-gray-200'
   }
 } as const;
 
@@ -53,7 +59,7 @@ interface Task {
   project_id: string;
   due_date: string;
   amount: number;
-  status: TaskStatus;
+  status: 'pending' | 'in_progress' | 'delayed' | 'completed' | 'cancelled';
   description?: string;
   completed_at?: string;
   created_at: string;
@@ -350,17 +356,21 @@ export default function TasksList({ status }: TasksListProps) {
     try {
       const { error } = await supabase
         .from('tasks')
-        .delete()
+        .update({ status: 'cancelled' })
         .eq('id', taskId);
 
       if (error) throw error;
       
-      setTasks(prev => prev.filter(task => task.id !== taskId));
+      setTasks(prev => prev.map(task => 
+        task.id === taskId 
+          ? { ...task, status: 'cancelled' }
+          : task
+      ));
       
       addToast({
         type: 'success',
         title: 'Task Deleted',
-        message: 'The task has been deleted successfully.'
+        message: 'The task has been marked as cancelled.'
       });
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -678,15 +688,15 @@ export default function TasksList({ status }: TasksListProps) {
                         </span>
                         <div className="flex-1">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                            <h4 className="text-lg font-medium text-gray-900">
+                            <h4 className={`text-lg font-medium ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
                               {task.project?.name || 'Unknown Project'}
                             </h4>
-                            <span className="text-sm text-gray-500">
+                            <span className={`text-sm ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}`}>
                               • Assigned to {task.worker?.name || 'Unknown Worker'}
                             </span>
                           </div>
                           {task.description && (
-                            <p className="text-sm text-gray-500 mt-1">{task.description}</p>
+                            <p className={`text-sm ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'} mt-1`}>{task.description}</p>
                           )}
                           {task.late_reason && (
                             <p className="text-sm text-orange-600 mt-1">
@@ -724,24 +734,30 @@ export default function TasksList({ status }: TasksListProps) {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => setShowStatusUpdate(showStatusUpdate === task.id ? null : task.id)}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-full ${STATUS_COLORS[task.status].bg} ${STATUS_COLORS[task.status].text} ${STATUS_COLORS[task.status].hover}`}
-                          >
-                            {STATUS_LABELS[task.status]}
-                          </button>
-                          <button
-                            onClick={() => setShowDeductions(showDeductions === task.id ? null : task.id)}
-                            className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-                          >
-                            <MinusCircle className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTask(task.id)}
-                            className="p-2 text-red-400 hover:text-red-600 rounded-full hover:bg-red-50"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
+                          {task.status !== 'cancelled' && (
+                            <button
+                              onClick={() => setShowStatusUpdate(showStatusUpdate === task.id ? null : task.id)}
+                              className={`px-3 py-1.5 text-xs font-medium rounded-full ${STATUS_COLORS[task.status].bg} ${STATUS_COLORS[task.status].text} ${STATUS_COLORS[task.status].hover}`}
+                            >
+                              {STATUS_LABELS[task.status]}
+                            </button>
+                          )}
+                          {task.status !== 'cancelled' && (
+                            <button
+                              onClick={() => setShowDeductions(showDeductions === task.id ? null : task.id)}
+                              className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                            >
+                              <MinusCircle className="h-5 w-5" />
+                            </button>
+                          )}
+                          {task.status !== 'cancelled' && (
+                            <button
+                              onClick={() => handleDeleteTask(task.id)}
+                              className="p-2 text-red-400 hover:text-red-600 rounded-full hover:bg-red-50"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -753,27 +769,29 @@ export default function TasksList({ status }: TasksListProps) {
                       <h5 className="text-sm font-medium text-gray-900 mb-3">Update Status</h5>
                       <div className="space-y-3">
                         {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                          <button
-                            key={key}
-                            onClick={() => {
-                              if (key === 'delayed' && !delayReason) {
-                                addToast({
-                                  type: 'error',
-                                  title: 'Error',
-                                  message: 'Please provide a reason for the delay'
-                                });
-                                return;
-                              }
-                              updateTaskStatus(task.id, key as TaskStatus, key === 'delayed' ? delayReason : undefined);
-                            }}
-                            className={`w-full px-3 py-2 text-sm font-medium rounded-md ${
-                              task.status === key
-                                ? `${STATUS_COLORS[key].bg} ${STATUS_COLORS[key].text}`
-                                : 'bg-white text-gray-700 hover:bg-gray-100'
-                            }`}
-                          >
-                            {label}
-                          </button>
+                          key !== 'cancelled' && (
+                            <button
+                              key={key}
+                              onClick={() => {
+                                if (key === 'delayed' && !delayReason) {
+                                  addToast({
+                                    type: 'error',
+                                    title: 'Error',
+                                    message: 'Please provide a reason for the delay'
+                                  });
+                                  return;
+                                }
+                                updateTaskStatus(task.id, key as TaskStatus, key === 'delayed' ? delayReason : undefined);
+                              }}
+                              className={`w-full px-3 py-2 text-sm font-medium rounded-md ${
+                                task.status === key
+                                  ? `${STATUS_COLORS[key].bg} ${STATUS_COLORS[key].text}`
+                                  : 'bg-white text-gray-700 hover:bg-gray-100'
+                              }`}
+                            >
+                              {label}
+                            </button>
+                          )
                         ))}
                         {showStatusUpdate === task.id && (
                           <div className="mt-3">

@@ -5,27 +5,47 @@ import { format, isAfter, startOfDay, endOfDay } from 'date-fns';
 import WorkerDeductions from './WorkerDeductions';
 import { useUI } from '../../context/UIContext';
 import { CURRENCIES } from '../../utils/constants';
+import { Task } from '../../types';
 
 const STATUS_COLORS = {
   pending: { bg: 'bg-yellow-100', text: 'text-yellow-800', hover: 'hover:bg-yellow-200' },
   in_progress: { bg: 'bg-blue-100', text: 'text-blue-800', hover: 'hover:bg-blue-200' },
   delayed: { bg: 'bg-red-100', text: 'text-red-800', hover: 'hover:bg-red-200' },
-  completed: { bg: 'bg-green-100', text: 'text-green-800', hover: 'hover:bg-green-200' }
-};
+  completed: { bg: 'bg-green-100', text: 'text-green-800', hover: 'hover:bg-green-200' },
+  cancelled: { bg: 'bg-gray-100', text: 'text-gray-800', hover: 'hover:bg-gray-200' }
+} as const;
 
 const STATUS_LABELS = {
   pending: 'Assigned',
   in_progress: 'In Progress',
   delayed: 'Delayed',
-  completed: 'Completed'
-};
+  completed: 'Completed',
+  cancelled: 'Cancelled'
+} as const;
+
+type TaskStatus = keyof typeof STATUS_LABELS;
+
+interface WorkerProject {
+  project_id: string;
+  rate: number;
+  project: {
+    id: string;
+    name: string;
+  };
+}
 
 interface WorkerTasksProps {
-  worker: any;
-  tasks: any[];
-  setTasks: (tasks: any[]) => void;
-  workerProjects: any[];
-  organization: any;
+  worker: {
+    id: string;
+    name: string;
+  };
+  tasks: Task[];
+  setTasks: React.Dispatch<React.SetStateAction<Task[]>>;
+  workerProjects: WorkerProject[];
+  organization: {
+    id: string;
+    currency: string;
+  };
 }
 
 const baseInputClasses = "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm px-3 py-2";
@@ -50,9 +70,9 @@ export default function WorkerTasks({
   const { confirm, addToast } = useUI();
   const currencySymbol = CURRENCIES[organization.currency]?.symbol || organization.currency;
 
-  const updateTaskStatus = async (taskId: string, newStatus: Task['status'], reason?: string) => {
+  const updateTaskStatus = async (taskId: string, newStatus: TaskStatus, reason?: string) => {
     try {
-      const updateData: any = {
+      const updateData: Partial<Task> = {
         status: newStatus
       };
 
@@ -73,11 +93,7 @@ export default function WorkerTasks({
 
       if (error) throw error;
 
-      setTasks(prev =>
-        prev.map(task =>
-          task.id === taskId ? { ...task, ...updateData } : task
-        )
-      );
+      setTasks(prev => prev.map(task => task.id === taskId ? { ...task, ...updateData } : task));
 
       setShowStatusUpdate(null);
       setDelayReason('');
@@ -161,23 +177,23 @@ export default function WorkerTasks({
 
   const handleUpdateTaskStatus = async (taskId: string, newStatus: 'pending' | 'completed') => {
     try {
+      const updateData: Partial<Task> = {
+        status: newStatus,
+        completed_at: newStatus === 'completed' ? new Date().toISOString() : undefined
+      };
+
       const { error } = await supabase
         .from('tasks')
-        .update({
-          status: newStatus,
-          completed_at: newStatus === 'completed' ? new Date().toISOString() : null
-        })
+        .update(updateData)
         .eq('id', taskId);
 
       if (error) throw error;
 
-      setTasks(prev =>
-        prev.map(task =>
-          task.id === taskId
-            ? { ...task, status: newStatus, completed_at: newStatus === 'completed' ? new Date().toISOString() : null }
-            : task
-        )
-      );
+      setTasks(prev => prev.map(task => 
+        task.id === taskId
+          ? { ...task, ...updateData }
+          : task
+      ));
 
       addToast({
         type: 'success',
@@ -208,17 +224,21 @@ export default function WorkerTasks({
     try {
       const { error } = await supabase
         .from('tasks')
-        .delete()
+        .update({ status: 'cancelled' })
         .eq('id', taskId);
 
       if (error) throw error;
       
-      setTasks(prev => prev.filter(task => task.id !== taskId));
+      setTasks(prev => prev.map(task => 
+        task.id === taskId 
+          ? { ...task, status: 'cancelled' }
+          : task
+      ));
       
       addToast({
         type: 'success',
         title: 'Task Deleted',
-        message: 'The task has been deleted successfully.'
+        message: 'The task has been marked as cancelled.'
       });
     } catch (error) {
       console.error('Error deleting task:', error);
@@ -339,12 +359,12 @@ export default function WorkerTasks({
                         </span>
                         <div className="flex-1">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                            <h4 className="text-lg font-medium text-gray-900">
+                            <h4 className={`text-lg font-medium ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
                               {project?.name}
                             </h4>
                           </div>
                           {task.description && (
-                            <p className="text-sm text-gray-500 mt-1">{task.description}</p>
+                            <p className={`text-sm ${task.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'} mt-1`}>{task.description}</p>
                           )}
                           {task.late_reason && (
                             <p className="text-sm text-orange-600 mt-1">
@@ -382,26 +402,32 @@ export default function WorkerTasks({
                           )}
                         </div>
                         <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => {
-                              setShowStatusUpdate(showStatusUpdate === task.id ? null : task.id);
-                            }}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-full ${STATUS_COLORS[task.status].bg} ${STATUS_COLORS[task.status].text} ${STATUS_COLORS[task.status].hover}`}
-                          >
-                            {STATUS_LABELS[task.status]}
-                          </button>
-                          <button
-                            onClick={() => setShowDeductions(showDeductions === task.id ? null : task.id)}
-                            className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
-                          >
-                            <MinusCircle className="h-5 w-5" />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteTask(task.id)}
-                            className="p-2 text-red-400 hover:text-red-600 rounded-full hover:bg-red-50"
-                          >
-                            <Trash2 className="h-5 w-5" />
-                          </button>
+                          {task.status !== 'cancelled' && (
+                            <button
+                              onClick={() => {
+                                setShowStatusUpdate(showStatusUpdate === task.id ? null : task.id);
+                              }}
+                              className={`px-3 py-1.5 text-xs font-medium rounded-full ${STATUS_COLORS[task.status].bg} ${STATUS_COLORS[task.status].text} ${STATUS_COLORS[task.status].hover}`}
+                            >
+                              {STATUS_LABELS[task.status]}
+                            </button>
+                          )}
+                          {task.status !== 'cancelled' && (
+                            <button
+                              onClick={() => setShowDeductions(showDeductions === task.id ? null : task.id)}
+                              className="p-2 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                            >
+                              <MinusCircle className="h-5 w-5" />
+                            </button>
+                          )}
+                          {task.status !== 'cancelled' && (
+                            <button
+                              onClick={() => handleDeleteTask(task.id)}
+                              className="p-2 text-red-400 hover:text-red-600 rounded-full hover:bg-red-50"
+                            >
+                              <Trash2 className="h-5 w-5" />
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -415,16 +441,14 @@ export default function WorkerTasks({
                           <div className="space-y-4">
                             <div className="flex flex-wrap gap-2">
                               {Object.entries(STATUS_LABELS).map(([key, label]) => (
-                                key !== task.status && (
-                                  key !== 'delayed' ? (
-                                    <button
-                                      key={key}
-                                      onClick={() => updateTaskStatus(task.id, key as Task['status'])}
-                                      className={`px-3 py-1.5 text-sm font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50`}
-                                    >
-                                      {label}
-                                    </button>
-                                  ) : null
+                                key !== task.status && key !== 'cancelled' && (
+                                  <button
+                                    key={key}
+                                    onClick={() => updateTaskStatus(task.id, key as Task['status'])}
+                                    className={`px-3 py-1.5 text-sm font-medium rounded-md bg-white border border-gray-300 text-gray-700 hover:bg-gray-50`}
+                                  >
+                                    {label}
+                                  </button>
                                 )
                               ))}
                             </div>

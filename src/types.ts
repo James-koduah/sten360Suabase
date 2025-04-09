@@ -5,7 +5,7 @@ export interface Task {
   project_id: string;
   description?: string;
   due_date: string;
-  status: 'pending' | 'in_progress' | 'delayed' | 'completed';
+  status: 'pending' | 'in_progress' | 'delayed' | 'completed' | 'cancelled';
   amount: number;
   completed_at?: string;
   late_reason?: string;
