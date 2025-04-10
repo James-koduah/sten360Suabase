@@ -274,20 +274,11 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
   if (showOrderSummary && createdOrder) {
     return (
       <OrderReceipt
-        orderData={createdOrder}
-        selectedClient={selectedClient!}
-        selectedServices={selectedServices}
-        selectedWorkers={selectedWorkers}
-        formData={formData}
-        currencySymbol={currencySymbol}
+        orderId={createdOrder.id}
         onClose={() => {
           setShowOrderSummary(false);
           onClose();
         }}
-        workers={workers}
-        workerProjects={workerProjects}
-        organizationName={organization?.name || 'Organization'}
-        organizationAddress={organization?.address}
       />
     );
   }

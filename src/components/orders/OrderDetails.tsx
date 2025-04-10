@@ -8,11 +8,12 @@ import { format } from 'date-fns';
 import { 
   ArrowLeft, Calendar, User, Package, Clock, 
   FileText, CheckCircle, XCircle, AlertTriangle, DollarSign,
-  X
+  X, Printer
 } from 'lucide-react';
 import { LucideIcon } from 'lucide-react';
 import { RecordPayment } from './RecordPayment';
 import { CancelOrderModal } from './CancelOrderModal';
+import OrderReceipt from './OrderReceipt';
 
 type TaskStatus = 'pending' | 'in_progress' | 'completed' | 'delayed' | 'cancelled';
 type OrderStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
@@ -138,6 +139,7 @@ export default function OrderDetails() {
   const [isDelayModalOpen, setIsDelayModalOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [delayReason, setDelayReason] = useState('');
+  const [isReceiptOpen, setIsReceiptOpen] = useState(false);
   const { organization } = useAuthStore();
   const { addToast } = useUI();
   const currencySymbol = organization?.currency ? CURRENCIES[organization.currency]?.symbol || organization.currency : CURRENCIES['USD'].symbol;
@@ -426,6 +428,13 @@ export default function OrderDetails() {
             <StatusIcon className="h-4 w-4" />
             <span className="text-sm font-medium">{ORDER_STATUS_LABELS[order.status]}</span>
           </div>
+          <button
+            onClick={() => setIsReceiptOpen(true)}
+            className="inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Print Receipt
+          </button>
           {order.status !== 'cancelled' && (
             <div className="relative">
               <select
@@ -905,6 +914,18 @@ export default function OrderDetails() {
 
         </div>
       </div>
+
+      {/* Order Receipt Modal */}
+      {isReceiptOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="relative">
+            <OrderReceipt
+              orderId={order.id}
+              onClose={() => setIsReceiptOpen(false)}
+            />
+          </div>
+        </div>
+      )}
 
       <CancelOrderModal
         isOpen={isCancelModalOpen}
