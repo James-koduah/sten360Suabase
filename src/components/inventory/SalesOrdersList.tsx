@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, Package, User, CreditCard, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, Package, User, CreditCard, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
@@ -10,6 +10,7 @@ import { format, startOfWeek, endOfWeek, getWeek, getYear, isAfter, startOfMonth
 import CreateSalesOrderForm from './CreateSalesOrderForm';
 import { RecordPayment } from '../orders/RecordPayment';
 import { Link, useSearchParams } from 'react-router-dom';
+import SalesOrderReceipt from './SalesOrderReceipt';
 
 type PaymentStatus = keyof typeof PAYMENT_STATUS_LABELS;
 
@@ -22,6 +23,7 @@ export default function SalesOrdersList() {
   const [showAddOrder, setShowAddOrder] = useState(searchParams.get('showCreateForm') === 'true');
   const [selectedOrder, setSelectedOrder] = useState<SalesOrder | null>(null);
   const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [showReceipt, setShowReceipt] = useState(false);
   const [amount, setAmount] = useState<string>('');
   const [paymentMethod, setPaymentMethod] = useState<string>('');
   const [paymentReference, setPaymentReference] = useState<string>('');
@@ -256,6 +258,11 @@ export default function SalesOrdersList() {
     }
   };
 
+  const handlePrintReceipt = (order: SalesOrder) => {
+    setSelectedOrder(order);
+    setShowReceipt(true);
+  };
+
   const filteredOrders = orders.filter(order =>
     (statusFilter === 'all' || order.payment_status === statusFilter) &&
     (order.order_number?.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -371,11 +378,11 @@ export default function SalesOrdersList() {
                 setSelectedOrder(null);
               }} 
             />
-            <div className="relative transform overflow-hidden rounded-lg bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+            <div className="relative transform overflow-hidden rounded-xl bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
               <div className="bg-white">
-                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-                  <h3 className="text-lg font-semibold text-gray-900 flex items-center">
-                    <CreditCard className="h-5 w-5 mr-2 text-gray-500" />
+                <div className="flex items-center justify-between px-6 py-5 border-b border-gray-200">
+                  <h3 className="text-xl font-semibold text-gray-900 flex items-center">
+                    <CreditCard className="h-6 w-6 mr-3 text-blue-600" />
                     Record Payment
                   </h3>
                   <button
@@ -383,7 +390,7 @@ export default function SalesOrdersList() {
                       setShowPaymentForm(false);
                       setSelectedOrder(null);
                     }}
-                    className="text-gray-400 hover:text-gray-500"
+                    className="text-gray-400 hover:text-gray-500 transition-colors"
                   >
                     <span className="sr-only">Close</span>
                     <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" strokeWidth="1.5" stroke="currentColor">
@@ -391,31 +398,35 @@ export default function SalesOrdersList() {
                     </svg>
                   </button>
                 </div>
+                
                 <div className="px-6 py-5">
-                  <div className="mb-6">
-                    <div className="flex items-center justify-between mb-2">
+                  {/* Order Summary Card */}
+                  <div className="mb-6 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+                    <div className="flex items-center justify-between mb-3">
                       <span className="text-sm font-medium text-gray-500">Order Number</span>
                       <span className="text-sm font-medium text-gray-900">{selectedOrder.order_number}</span>
                     </div>
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center justify-between mb-3">
                       <span className="text-sm font-medium text-gray-500">Client</span>
                       <span className="text-sm font-medium text-gray-900">{selectedOrder.client?.name}</span>
                     </div>
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between pt-3 border-t border-blue-100">
                       <span className="text-sm font-medium text-gray-500">Outstanding Balance</span>
                       <span className="text-lg font-bold text-blue-600">
                         {currencySymbol} {selectedOrder.outstanding_balance.toFixed(2)}
                       </span>
                     </div>
                   </div>
-                  <div className="space-y-4">
+                  
+                  <div className="space-y-5">
+                    {/* Payment Amount */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Amount*
                       </label>
-                      <div className="mt-1 relative rounded-md shadow-sm">
+                      <div className="mt-1 relative rounded-lg shadow-md">
                         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                          <span className="text-gray-500 sm:text-sm">$</span>
+                          <span className="text-gray-500 sm:text-sm">{currencySymbol}</span>
                         </div>
                         <input
                           type="number"
@@ -424,68 +435,105 @@ export default function SalesOrdersList() {
                           max={selectedOrder.outstanding_balance}
                           value={amount}
                           onChange={(e) => setAmount(e.target.value)}
-                          className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
+                          className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-lg py-2.5 shadow-md"
                           placeholder="0.00"
                           required
                         />
                       </div>
                     </div>
 
+                    {/* Payment Method */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Payment Method*
                       </label>
-                      <select
-                        value={paymentMethod}
-                        onChange={(e) => setPaymentMethod(e.target.value)}
-                        className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-                        required
-                      >
-                        <option value="">Select a payment method</option>
-                        <option value="mobile_money">Mobile Money</option>
-                        <option value="cash">Cash</option>
-                        <option value="bank_transfer">Bank Transfer</option>
-                        <option value="credit_card">Credit Card</option>
-                        <option value="check">Check</option>
-                      </select>
+                      <div className="mt-1 relative rounded-lg shadow-md">
+                        <select
+                          value={paymentMethod}
+                          onChange={(e) => setPaymentMethod(e.target.value)}
+                          className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-3 pr-10 py-2.5 text-base border-gray-300 rounded-lg sm:text-sm shadow-md"
+                          required
+                        >
+                          <option value="">Select a payment method</option>
+                          <option value="mobile_money">Mobile Money</option>
+                          <option value="cash">Cash</option>
+                          <option value="bank_transfer">Bank Transfer</option>
+                          <option value="credit_card">Credit Card</option>
+                          <option value="check">Check</option>
+                        </select>
+                      </div>
                     </div>
 
+                    {/* Payment Reference */}
                     <div>
-                      <label className="block text-sm font-medium text-gray-700">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
                         Payment Reference
                       </label>
-                      <input
-                        type="text"
-                        value={paymentReference}
-                        onChange={(e) => setPaymentReference(e.target.value)}
-                        className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
-                        placeholder="e.g., Check number, Transaction ID"
-                      />
+                      <div className="mt-1 relative rounded-lg shadow-md">
+                        <input
+                          type="text"
+                          value={paymentReference}
+                          onChange={(e) => setPaymentReference(e.target.value)}
+                          className="focus:ring-blue-500 focus:border-blue-500 block w-full shadow-md sm:text-sm border-gray-300 rounded-lg py-2.5 px-3"
+                          placeholder="e.g., Check number, Transaction ID"
+                        />
+                      </div>
                     </div>
+                  </div>
 
-                    <div className="mt-6 flex justify-end space-x-3">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowPaymentForm(false);
-                          setSelectedOrder(null);
-                        }}
-                        className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        onClick={handleSubmit}
-                        disabled={isSubmitting}
-                        className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300"
-                      >
-                        {isSubmitting ? 'Recording Payment...' : 'Record Payment'}
-                      </button>
-                    </div>
+                  <div className="mt-8 flex justify-end space-x-3 pt-4 border-t border-gray-200">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPaymentForm(false);
+                        setSelectedOrder(null);
+                      }}
+                      className="px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSubmit}
+                      disabled={isSubmitting}
+                      className="px-4 py-2.5 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:bg-blue-300 transition-colors"
+                    >
+                      {isSubmitting ? (
+                        <div className="flex items-center">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Recording Payment...
+                        </div>
+                      ) : 'Record Payment'}
+                    </button>
                   </div>
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showReceipt && selectedOrder && (
+        <div className="fixed inset-0 z-50 overflow-y-auto">
+          <div className="flex min-h-full items-end justify-center p-4 text-center sm:items-center sm:p-0">
+            <div 
+              className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" 
+              onClick={() => {
+                setShowReceipt(false);
+                setSelectedOrder(null);
+              }} 
+            />
+            <div className="relative transform overflow-hidden rounded-xl bg-white text-left shadow-xl transition-all sm:my-8 sm:w-full sm:max-w-lg">
+              <SalesOrderReceipt 
+                orderId={selectedOrder.id} 
+                onClose={() => {
+                  setShowReceipt(false);
+                  setSelectedOrder(null);
+                }} 
+              />
             </div>
           </div>
         </div>
@@ -620,6 +668,13 @@ export default function SalesOrdersList() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex justify-end space-x-2">
+                        <button
+                          onClick={() => handlePrintReceipt(order)}
+                          className="text-blue-600 hover:text-blue-900"
+                          title="Print Receipt"
+                        >
+                          <Printer className="h-4 w-4" />
+                        </button>
                         {order.payment_status !== 'paid' && (
                           <button
                             onClick={() => {
@@ -627,19 +682,15 @@ export default function SalesOrdersList() {
                               setShowPaymentForm(true);
                             }}
                             className="text-green-600 hover:text-green-900"
+                            title="Record Payment"
                           >
                             <CreditCard className="h-4 w-4" />
                           </button>
                         )}
-                        {/* <button
-                          onClick={() => {}}
-                          className="text-blue-600 hover:text-blue-900"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button> */}
                         <button
                           onClick={() => handleDeleteOrder(order.id)}
                           className="text-red-600 hover:text-red-900"
+                          title="Delete Order"
                         >
                           <Trash2 className="h-4 w-4" />
                         </button>

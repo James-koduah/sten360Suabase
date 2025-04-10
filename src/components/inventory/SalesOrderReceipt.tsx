@@ -18,34 +18,39 @@ interface Client {
     }[];
 }
 
-interface Worker {
+interface Product {
     id: string;
     name: string;
+    price: number;
 }
 
-interface Service {
+interface OrderItem {
     id: string;
+    product_id: string | null;
     name: string;
-    cost: number;
-}
-
-interface OrderService {
-    service: Service;
     quantity: number;
+    unit_price: number;
+    total_price: number;
+    is_custom_item: boolean;
+    product?: Product;
 }
 
-interface OrderWorker {
-    worker: {
-        id: string;
-        name: string;
-    };
-    project: {
-        id: string;
-        name: string;
-    };
+interface SalesOrder {
+    id: string;
+    organization_id: string;
+    client_id: string;
+    order_number: string;
+    total_amount: number;
+    outstanding_balance: number;
+    payment_status: string;
+    notes: string | null;
+    created_at: string;
+    updated_at: string;
+    client?: Client;
+    items?: OrderItem[];
 }
 
-interface OrderReceiptProps {
+interface SalesOrderReceiptProps {
     orderId: string;
     onClose: () => void;
 }
@@ -54,8 +59,8 @@ const generateReceiptHTML = (
     organizationName: string,
     organizationAddress: string | undefined,
     selectedClient: Client,
-    orderData: any,
-    selectedServices: OrderService[],
+    orderData: SalesOrder,
+    orderItems: OrderItem[],
     payments: any[],
     currencySymbol: string,
     totalAmount: number
@@ -63,7 +68,7 @@ const generateReceiptHTML = (
   <!DOCTYPE html>
   <html>
     <head>
-      <title>Receipt</title>
+      <title>Sales Receipt</title>
       <style>
         @page {
           size: 57mm auto;
@@ -155,7 +160,7 @@ const generateReceiptHTML = (
         <div class="header">
           <div class="title">${organizationName}</div>
           ${organizationAddress ? `<div class="text">${organizationAddress}</div>` : ''}
-          <div class="subtitle">RECEIPT</div>
+          <div class="subtitle">SALES RECEIPT</div>
         </div>
         
         <div class="section">
@@ -175,14 +180,14 @@ const generateReceiptHTML = (
         </div>
 
         <div class="section">
-          <div class="section-title">Services:</div>
-          ${selectedServices.map(({ service, quantity }) => `
+          <div class="section-title">Items:</div>
+          ${orderItems.map(item => `
             <div class="item-row">
               <div class="item-details">
-                <div>${service.name}</div>
-                <div class="item-quantity">x${quantity}</div>
+                <div>${item.name}</div>
+                <div class="item-quantity">x${item.quantity}</div>
               </div>
-              <div>${currencySymbol}${service.cost.toFixed(2)}</div>
+              <div>${currencySymbol}${item.total_price.toFixed(2)}</div>
             </div>
           `).join('')}
         </div>
@@ -219,19 +224,18 @@ const generateReceiptHTML = (
         ` : ''}
 
         <div class="footer">
-          <div class="text">Thank you for doing business with us :)</div>
+          <div class="text">Thank you for your purchase :)</div>
         </div>
       </div>
     </body>
   </html>
 `;
 
-export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
+export default function SalesOrderReceipt({ orderId, onClose }: SalesOrderReceiptProps) {
     const [isLoading, setIsLoading] = useState(true);
-    const [orderData, setOrderData] = useState<any>(null);
+    const [orderData, setOrderData] = useState<SalesOrder | null>(null);
     const [selectedClient, setSelectedClient] = useState<Client | null>(null);
-    const [selectedServices, setSelectedServices] = useState<OrderService[]>([]);
-    const [selectedWorkers, setSelectedWorkers] = useState<OrderWorker[]>([]);
+    const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
     const [payments, setPayments] = useState<any[]>([]);
     const { organization } = useAuthStore();
     const { addToast } = useUI();
@@ -242,27 +246,19 @@ export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
             try {
                 // Fetch order details
                 const { data: orderData, error: orderError } = await supabase
-                    .from('orders')
+                    .from('sales_orders')
                     .select(`
                         *,
                         client:clients(name, phone),
-                        workers:order_workers(
+                        items:sales_order_items(
                             id,
-                            worker_id,
-                            status,
-                            worker:workers(name),
-                            project:projects(name)
-                        ),
-                        services:order_services(
-                            id,
-                            service_id,
+                            product_id,
+                            name,
                             quantity,
-                            cost,
-                            service:services(name)
-                        ),
-                        custom_fields:order_custom_fields(
-                            id,
-                            field:client_custom_fields(title, value, type)
+                            unit_price,
+                            total_price,
+                            is_custom_item,
+                            product:products(name)
                         )
                     `)
                     .eq('id', orderId)
@@ -274,7 +270,7 @@ export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
                 const { data: paymentsData, error: paymentsError } = await supabase
                     .from('payments')
                     .select('*')
-                    .eq('reference_type', 'service_order')
+                    .eq('reference_type', 'sales_order')
                     .eq('reference_id', orderData.id);
 
                 if (paymentsError) throw paymentsError;
@@ -284,38 +280,27 @@ export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
                     id: orderData.client_id,
                     name: orderData.client.name,
                     phone: orderData.client.phone,
-                    custom_fields: orderData.custom_fields?.map((field: any) => ({
-                        id: field.id,
-                        title: field.field.title,
-                        value: field.field.value,
-                        type: field.field.type
-                    }))
+                    custom_fields: []
                 };
 
-                const services: OrderService[] = orderData.services.map((service: any) => ({
-                    service: {
-                        id: service.service_id,
-                        name: service.service.name,
-                        cost: service.cost
-                    },
-                    quantity: service.quantity
-                }));
-
-                const workers: OrderWorker[] = orderData.workers.map((worker: any) => ({
-                    worker: {
-                        id: worker.worker_id,
-                        name: worker.worker.name
-                    },
-                    project: {
-                        id: worker.project_id,
-                        name: worker.project.name
-                    }
+                const items: OrderItem[] = orderData.items.map((item: any) => ({
+                    id: item.id,
+                    product_id: item.product_id,
+                    name: item.name,
+                    quantity: item.quantity,
+                    unit_price: item.unit_price,
+                    total_price: item.total_price,
+                    is_custom_item: item.is_custom_item,
+                    product: item.product ? {
+                        id: item.product_id,
+                        name: item.product.name,
+                        price: item.unit_price
+                    } : undefined
                 }));
 
                 setOrderData(orderData);
                 setSelectedClient(client);
-                setSelectedServices(services);
-                setSelectedWorkers(workers);
+                setOrderItems(items);
                 setPayments(paymentsData || []);
             } catch (error) {
                 console.error('Error fetching order data:', error);
@@ -332,10 +317,7 @@ export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
         fetchOrderData();
     }, [orderId, addToast]);
 
-    const totalAmount = selectedServices.reduce(
-        (sum, { service }) => sum + (service.cost),
-        0
-    );
+    const totalAmount = orderData?.total_amount || 0;
 
     const handlePrint = useCallback(() => {
         if (!selectedClient || !orderData) return;
@@ -348,7 +330,7 @@ export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
                     organization?.address,
                     selectedClient,
                     orderData,
-                    selectedServices,
+                    orderItems,
                     payments,
                     currencySymbol,
                     totalAmount
@@ -363,7 +345,7 @@ export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
         organization,
         selectedClient,
         orderData,
-        selectedServices,
+        orderItems,
         payments,
         currencySymbol,
         totalAmount
@@ -411,7 +393,7 @@ export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
                         {organization?.address && (
                             <p className="text-[12px] mb-2">{organization.address}</p>
                         )}
-                        <h2 className="text-[12px] font-bold">RECEIPT</h2>
+                        <h2 className="text-[12px] font-bold">SALES RECEIPT</h2>
                     </div>
 
                     {/* Order Details */}
@@ -436,18 +418,18 @@ export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
                             <p className="text-[12px] pl-2">{orderData.order_number}</p>
                         </div>
 
-                        {/* Services */}
+                        {/* Items */}
                         <div>
-                            <p className="text-[12px] font-bold mb-2">Services:</p>
+                            <p className="text-[12px] font-bold mb-2">Items:</p>
                             <div className="space-y-1">
-                                {selectedServices.map(({ service, quantity }) => (
-                                    <div key={service.id} className="flex justify-between pl-2">
+                                {orderItems.map((item) => (
+                                    <div key={item.id} className="flex justify-between pl-2">
                                         <div>
-                                            <p className="text-[12px]">{service.name}</p>
-                                            <p className="text-[10px] text-gray-500">x{quantity}</p>
+                                            <p className="text-[12px]">{item.name}</p>
+                                            <p className="text-[10px] text-gray-500">x{item.quantity}</p>
                                         </div>
                                         <p className="text-[12px]">
-                                            {currencySymbol} {service.cost.toFixed(2)}
+                                            {currencySymbol} {item.total_price.toFixed(2)}
                                         </p>
                                     </div>
                                 ))}
@@ -499,7 +481,7 @@ export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
 
                     {/* Footer */}
                     <div className="mt-6 text-center">
-                        <p className="text-[12px]">Thank you for doing business with us :)</p>
+                        <p className="text-[12px]">Thank you for your purchase :)</p>
                     </div>
                 </div>
             </div>

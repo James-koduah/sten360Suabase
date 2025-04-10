@@ -460,47 +460,6 @@ export default function OrderDetails() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Main Order Info */}
         <div className="lg:col-span-2 space-y-6">
-          {/* Services */}
-          <div className={`bg-white shadow rounded-lg overflow-hidden ${order.status === 'cancelled' ? 'opacity-75' : ''}`}>
-            <div className="px-4 py-5 sm:px-6 border-b">
-              <h3 className="text-lg font-medium text-gray-900">Services</h3>
-            </div>
-            <div className="px-4 py-5 sm:p-6">
-              <div className="space-y-4">
-                {order.services.map((service) => (
-                  <div
-                    key={service.id}
-                    className={`flex items-center justify-between p-4 bg-gray-50 rounded-lg ${order.status === 'cancelled' ? 'line-through text-gray-400' : ''}`}
-                  >
-                    <div className="flex items-center space-x-3">
-                      <Package className="h-5 w-5 text-gray-400" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {service.service.name}
-                        </p>
-                        <p className="text-sm text-gray-500">
-                          Quantity: {service.quantity}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="text-sm font-medium text-gray-900">
-                      {currencySymbol} {service.cost.toFixed(2)}
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-6 pt-6 border-t">
-                <div className="flex justify-between text-sm">
-                  <span className="font-medium text-gray-900">Total Amount</span>
-                  <span className={`font-bold ${order.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                    {currencySymbol} {order.total_amount.toFixed(2)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-
           {/* Custom Fields */}
           {order.custom_fields?.length > 0 && (
             <div className="bg-white shadow rounded-lg overflow-hidden">
@@ -850,50 +809,83 @@ export default function OrderDetails() {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Client Info */}
+          {/* Order Details Card - Consolidated */}
           <div className={`bg-white shadow rounded-lg overflow-hidden ${order.status === 'cancelled' ? 'opacity-75' : ''}`}>
             <div className="px-4 py-5 sm:px-6 border-b">
-              <h3 className="text-lg font-medium text-gray-900">Client</h3>
+              <h3 className="text-lg font-medium text-gray-900">Order Details</h3>
             </div>
-            <div className="px-4 py-5 sm:p-6">
-              <div className="flex items-center space-x-3">
-                <User className="h-5 w-5 text-gray-400" />
-                <span className={`text-sm font-medium ${order.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                  {order.client.name}
-                </span>
-              </div>
-            </div>
-          </div>
-          {/* Description */}
-          {order.description && (
-            <div className={`bg-white shadow rounded-lg overflow-hidden ${order.status === 'cancelled' ? 'opacity-75' : ''}`}>
-              <div className="px-4 py-5 sm:px-6 border-b">
-                <h3 className="text-lg font-medium text-gray-900">Description</h3>
-              </div>
-              <div className="px-4 py-5 sm:p-6">
-                <p className={`text-sm ${order.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}`}>
-                  {order.description}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* Due Date */}
-          {order.due_date && (
-            <div className={`bg-white shadow rounded-lg overflow-hidden ${order.status === 'cancelled' ? 'opacity-75' : ''}`}>
-              <div className="px-4 py-5 sm:px-6 border-b">
-                <h3 className="text-lg font-medium text-gray-900">Due Date</h3>
-              </div>
-              <div className="px-4 py-5 sm:p-6">
+            <div className="px-4 py-5 sm:p-6 space-y-6">
+              {/* Client Info */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Client</h4>
                 <div className="flex items-center space-x-3">
-                  <Calendar className="h-5 w-5 text-gray-400" />
+                  <User className="h-5 w-5 text-gray-400" />
                   <span className={`text-sm font-medium ${order.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
-                    {format(new Date(order.due_date), 'MMM d, yyyy')}
+                    {order.client.name}
                   </span>
                 </div>
               </div>
+
+              {/* Description */}
+              {order.description && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">Description</h4>
+                  <p className={`text-sm ${order.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}`}>
+                    {order.description}
+                  </p>
+                </div>
+              )}
+
+              {/* Due Date */}
+              {order.due_date && (
+                <div>
+                  <h4 className="text-sm font-medium text-gray-500 mb-2">Due Date</h4>
+                  <div className="flex items-center space-x-3">
+                    <Calendar className="h-5 w-5 text-gray-400" />
+                    <span className={`text-sm font-medium ${order.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                      {format(new Date(order.due_date), 'MMM d, yyyy')}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {/* Services */}
+              <div>
+                <h4 className="text-sm font-medium text-gray-500 mb-2">Services</h4>
+                <div className="space-y-3">
+                  {order.services.map((service) => (
+                    <div
+                      key={service.id}
+                      className={`flex items-center justify-between p-3 bg-gray-50 rounded-lg ${order.status === 'cancelled' ? 'line-through text-gray-400' : ''}`}
+                    >
+                      <div className="flex items-center space-x-3">
+                        <Package className="h-5 w-5 text-gray-400" />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {service.service.name}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            Quantity: {service.quantity}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-sm font-medium text-gray-900">
+                        {currencySymbol} {service.cost.toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 pt-3 border-t">
+                  <div className="flex justify-between text-sm">
+                    <span className="font-medium text-gray-900">Total Amount</span>
+                    <span className={`font-bold ${order.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-900'}`}>
+                      {currencySymbol} {order.total_amount.toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
-          )}
+          </div>
 
           {/* Cancel Order Button - Only show if order is not cancelled */}
           {order.status !== 'cancelled' && (
@@ -911,7 +903,6 @@ export default function OrderDetails() {
               </div>
             </div>
           )}
-
         </div>
       </div>
 
