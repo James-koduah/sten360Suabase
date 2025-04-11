@@ -129,18 +129,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           <div className="absolute inset-0 bg-gray-500 opacity-75"></div>
         </div>
 
-        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+        <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-md sm:w-full">
           <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
-            <h3 className="text-lg font-semibold text-gray-900">
-              {selectedOrder ? 'Record Payment' : 'Select Order'}
-            </h3>
-            <button
-              onClick={() => {
-                onClose();
-                setSelectedOrder(null);
-              }}
-              className="text-gray-400 hover:text-gray-500"
-            >
+            <h3 className="text-lg font-medium text-gray-900">Record Payment</h3>
+            <button onClick={onClose} className="text-gray-400 hover:text-gray-500">
               <X className="h-5 w-5" />
             </button>
           </div>
@@ -148,18 +140,17 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
           {selectedOrder ? (
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Amount*
-                </label>
-                <div className="mt-1 relative rounded-md shadow-sm">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Amount*</label>
+                <div className="relative rounded-md">
                   <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                     <span className="text-gray-500 sm:text-sm">{currencySymbol}</span>
                   </div>
                   <input
-                    type="text"
+                    type="number"
                     name="amount"
+                    step="0.01"
                     max={selectedOrder.outstandingBalance}
-                    className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm border-gray-300 rounded-md"
+                    className="focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 pr-12 sm:text-sm rounded-md h-[35px] shadow-[0_0_3px_#ddd]"
                     placeholder="0.00"
                     required
                   />
@@ -173,12 +164,10 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Payment Method*
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Method*</label>
                 <select
                   name="paymentMethod"
-                  className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
+                  className="block w-full pl-3 pr-10 sm:text-sm rounded-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 h-[35px] shadow-[0_0_3px_#ddd]"
                   required
                 >
                   <option value="">Select a payment method</option>
@@ -189,22 +178,20 @@ export const PaymentModal: React.FC<PaymentModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700">
-                  Payment Reference
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Payment Reference</label>
                 <input
                   type="text"
                   name="paymentReference"
-                  className="mt-1 focus:ring-blue-500 focus:border-blue-500 block w-full shadow-sm sm:text-sm border-gray-300 rounded-md"
+                  className="focus:ring-blue-500 focus:border-blue-500 block w-full sm:text-sm rounded-md h-[35px] shadow-[0_0_3px_#ddd]"
                   placeholder="e.g., Check number, Transaction ID"
                 />
               </div>
 
-              <div className="flex justify-end space-x-3 pt-4 border-t">
+              <div className="flex justify-end space-x-3 pt-4">
                 <button
                   type="button"
                   onClick={() => setSelectedOrder(null)}
-                  className="px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                  className="px-4 py-2 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
                 >
                   Back
                 </button>

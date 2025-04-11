@@ -155,7 +155,7 @@ const generateReceiptHTML = (
         <div class="header">
           <div class="title">${organizationName}</div>
           ${organizationAddress ? `<div class="text">${organizationAddress}</div>` : ''}
-          <div class="subtitle">RECEIPT</div>
+          <div class="subtitle">SERVICE RECEIPT</div>
         </div>
         
         <div class="section">
@@ -411,7 +411,7 @@ export default function OrderReceipt({ orderId, onClose }: OrderReceiptProps) {
                         {organization?.address && (
                             <p className="text-[12px] mb-2">{organization.address}</p>
                         )}
-                        <h2 className="text-[12px] font-bold">RECEIPT</h2>
+                        <h2 className="text-[12px] font-bold">SERVICE RECEIPT</h2>
                     </div>
 
                     {/* Order Details */}
