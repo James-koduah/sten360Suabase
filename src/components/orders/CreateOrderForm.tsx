@@ -4,7 +4,7 @@ import { useAuthStore } from '../../stores/authStore';
 import { useUI } from '../../context/UIContext';
 import { CURRENCIES } from '../../utils/constants';
 import { format } from 'date-fns';
-import { Plus, Minus, X, User, FileText, Calendar, CreditCard, DollarSign } from 'lucide-react';
+import { Plus, Minus, X, User, FileText, Calendar, CreditCard, DollarSign, Search } from 'lucide-react';
 import OrderReceipt from './OrderReceipt';
 
 interface Client {
@@ -53,10 +53,11 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
   }[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showClientModal, setShowClientModal] = useState(false);
   const [formData, setFormData] = useState({
     description: '',
     due_date: '',
-    initial_payment: 0,
+    initial_payment: null as number | null,
     payment_method: ''
   });
   const [showOrderSummary, setShowOrderSummary] = useState(false);
@@ -144,11 +145,11 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedClient || selectedServices.length === 0 || !selectedWorkers.some(w => w.worker_id && w.project_id)) {
+    if (!selectedClient || selectedServices.length === 0) {
       addToast({
         type: 'error',
         title: 'Validation Error',
-        message: 'Please select a client, at least one service, and assign at least one worker with a project.'
+        message: 'Please select a client and at least one service.'
       });
       return;
     }
@@ -167,7 +168,7 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
       0
     );
 
-    if (formData.initial_payment > totalAmount) {
+    if (formData.initial_payment !== null && formData.initial_payment > totalAmount) {
       addToast({
         type: 'error',
         title: 'Validation Error',
@@ -203,7 +204,7 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
       if (!orderData) throw new Error('Failed to create order');
 
       // Record initial payment if any
-      if (formData.initial_payment > 0 && formData.payment_method) {
+      if (formData.initial_payment !== null && formData.initial_payment > 0 && formData.payment_method) {
         const { error: paymentError } = await supabase.rpc('record_payment', {
           p_organization_id: organization.id,
           p_order_id: orderData.id,
@@ -314,60 +315,39 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
                 Select Client *
               </label>
               <div className="mt-1 relative">
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Search clients by name..."
-                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white transition-all duration-200 hover:border-blue-400"
-                  />
-                </div>
-                {searchQuery && (
-                  <div className="absolute z-10 mt-2 w-full bg-white shadow-xl rounded-lg border border-gray-200 max-h-60 overflow-auto divide-y divide-gray-100">
-                    {filteredClients.map(client => (
-                      <button
-                        key={client.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedClient(client);
-                          setSearchQuery('');
-                          setSelectedCustomFields(client.custom_fields?.map(f => f.id) || []);
-                        }}
-                        className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors duration-150 flex items-center space-x-3"
-                      >
-                        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
-                          <User className="h-4 w-4 text-blue-600" />
-                        </div>
-                        <div>
-                        {client.name}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-              {selectedClient && !searchQuery && (
-                <div className="mt-3 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg flex items-center justify-between animate-fadeIn shadow-sm">
-                  <div className="flex items-center">
-                    <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center">
-                      <User className="h-5 w-5 text-blue-600" />
+                {selectedClient ? (
+                  <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg flex items-center justify-between animate-fadeIn shadow-sm">
+                    <div className="flex items-center">
+                      <div className="w-10 h-10 rounded-full bg-white shadow-sm flex items-center justify-center">
+                        <User className="h-5 w-5 text-blue-600" />
+                      </div>
+                      <div className="ml-3">
+                        <span className="text-sm font-semibold text-blue-900">{selectedClient.name}</span>
+                        <p className="text-xs text-blue-600 mt-0.5">Selected Client</p>
+                      </div>
                     </div>
-                    <div className="ml-3">
-                      <span className="text-sm font-semibold text-blue-900">{selectedClient.name}</span>
-                      <p className="text-xs text-blue-600 mt-0.5">Selected Client</p>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedClient(null);
+                        setSelectedCustomFields([]);
+                      }}
+                      className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-full transition-colors duration-200"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
+                ) : (
                   <button
                     type="button"
-                    onClick={() => setSelectedClient(null)}
-                    className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-full transition-colors duration-200"
+                    onClick={() => setShowClientModal(true)}
+                    className="w-full flex items-center px-4 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white transition-all duration-200 hover:border-blue-400"
                   >
-                    <X className="h-4 w-4" />
+                    <User className="h-5 w-5 text-gray-400 mr-3" />
+                    <span className="text-gray-500">Click to select a client</span>
                   </button>
-                </div>
-              )}
+                )}
+              </div>
 
               {/* Custom Fields Selection */}
               {selectedClient?.custom_fields && selectedClient.custom_fields.length > 0 && (
@@ -401,7 +381,7 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
               <div className="mt-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <label className="block text-sm font-semibold text-gray-800">
-                    Assign Workers
+                    Assign Workers (Optional)
                   </label>
                   <button
                     type="button"
@@ -621,9 +601,12 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
                     type="number"
                     min="0"
                     max={totalAmount}
-                    step="0"
-                    value={formData.initial_payment}
-                    onChange={(e) => setFormData(prev => ({ ...prev, initial_payment: parseFloat(e.target.value) || 0 }))}
+                    step="0.01"
+                    value={formData.initial_payment === null ? '' : formData.initial_payment}
+                    onChange={(e) => {
+                      const value = e.target.value === '' ? null : Math.max(0, parseFloat(e.target.value) || 0);
+                      setFormData(prev => ({ ...prev, initial_payment: value }));
+                    }}
                     className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white transition-all duration-200 hover:border-blue-400"
                     placeholder="Enter initial payment amount"
                   />
@@ -631,40 +614,36 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
               </div>
 
               {/* Payment Method */}
-              {formData.initial_payment > 0 && (
-                <div>
-                  <label className="block text-sm font-semibold text-gray-800 mb-2">
-                    Payment Method *
-                  </label>
-                  <div className="relative">
-                    <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                    <select
-                      value={formData.payment_method}
-                      onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
-                      className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white transition-all duration-200 hover:border-blue-400"
-                      required={formData.initial_payment > 0}
-                    >
-                      <option value="">Select Payment Method</option>
-                      <option value="mobile_money">Mobile Money</option>
-                      <option value="bank_transfer">Bank Transfer</option>
-                      <option value="cash">Cash</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-800 mb-2">
+                  Payment Method {formData.initial_payment !== null && formData.initial_payment > 0 ? '*' : ''}
+                </label>
+                <div className="relative">
+                  <CreditCard className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+                  <select
+                    value={formData.payment_method}
+                    onChange={(e) => setFormData(prev => ({ ...prev, payment_method: e.target.value }))}
+                    className="block w-full pl-10 pr-3 py-3 border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm bg-white transition-all duration-200 hover:border-blue-400"
+                    required={formData.initial_payment !== null && formData.initial_payment > 0}
+                  >
+                    <option value="">Select Payment Method</option>
+                    <option value="mobile_money">Mobile Money</option>
+                    <option value="bank_transfer">Bank Transfer</option>
+                    <option value="cash">Cash</option>
+                    <option value="other">Other</option>
+                  </select>
                 </div>
-              )}
+              </div>
 
               {/* Outstanding Balance Display */}
-              {formData.initial_payment > 0 && (
-                <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-gray-700">Outstanding Balance</span>
-                    <span className="text-xl font-bold text-green-600">
-                      {currencySymbol} {(totalAmount - formData.initial_payment).toFixed(2)}
-                    </span>
-                  </div>
+              <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 border border-green-100 rounded-lg">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-gray-700">Outstanding Balance</span>
+                  <span className="text-xl font-bold text-green-600">
+                    {currencySymbol} {(totalAmount - (formData.initial_payment ?? 0)).toFixed(2)}
+                  </span>
                 </div>
-              )}
+              </div>
             </div>
           </div>
 
@@ -700,6 +679,83 @@ export default function CreateOrderForm({ onClose, onSuccess }: CreateOrderFormP
           </div>
         </form>
       </div>
+
+      {/* Client Selection Modal */}
+      {showClientModal && (
+        <div className="fixed inset-0 z-50 overflow-y-auto" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+          <div className="flex items-end justify-center min-h-screen pt-4 px-4 pb-20 text-center sm:block sm:p-0">
+            <div className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity" aria-hidden="true" onClick={() => setShowClientModal(false)}></div>
+            <span className="hidden sm:inline-block sm:align-middle sm:h-screen" aria-hidden="true">&#8203;</span>
+            <div className="inline-block align-bottom bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:align-middle sm:max-w-lg sm:w-full">
+              <div className="bg-white px-4 pt-5 pb-4 sm:p-6 sm:pb-4">
+                <div className="sm:flex sm:items-start">
+                  <div className="w-full">
+                    <h3 className="text-lg leading-6 font-medium text-gray-900 mb-4" id="modal-title">
+                      Select Client
+                    </h3>
+                    <div className="mb-4">
+                      <div className="relative">
+                        <input
+                          type="text"
+                          value={searchQuery}
+                          onChange={(e) => setSearchQuery(e.target.value)}
+                          placeholder="Search clients by name..."
+                          className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                        />
+                        <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                          <Search className="h-5 w-5 text-gray-400" />
+                        </div>
+                      </div>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {filteredClients.length === 0 ? (
+                        <p className="text-center text-gray-500 py-4">No clients found</p>
+                      ) : (
+                        <div className="space-y-2">
+                          {filteredClients.map(client => (
+                            <button
+                              key={client.id}
+                              type="button"
+                              onClick={() => {
+                                setSelectedClient(client);
+                                setSelectedCustomFields(client.custom_fields?.map(f => f.id) || []);
+                                setSearchQuery('');
+                                setShowClientModal(false);
+                              }}
+                              className="w-full text-left px-4 py-3 hover:bg-blue-50 transition-colors duration-150 flex items-center space-x-3 rounded-lg"
+                            >
+                              <div className="flex-shrink-0 w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                                <User className="h-4 w-4 text-blue-600" />
+                              </div>
+                              <div>
+                                <div className="font-medium text-gray-900">{client.name}</div>
+                                {client.custom_fields && client.custom_fields.length > 0 && (
+                                  <div className="text-sm text-gray-500 mt-1">
+                                    {client.custom_fields.length} custom field{client.custom_fields.length !== 1 ? 's' : ''}
+                                  </div>
+                                )}
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse">
+                <button
+                  type="button"
+                  onClick={() => setShowClientModal(false)}
+                  className="mt-3 w-full inline-flex justify-center rounded-md border border-gray-300 shadow-sm px-4 py-2 bg-white text-base font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 sm:mt-0 sm:ml-3 sm:w-auto sm:text-sm"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
