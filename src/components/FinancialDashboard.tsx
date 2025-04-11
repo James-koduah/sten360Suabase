@@ -474,7 +474,7 @@ export default function FinancialDashboard() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm">
                         <span className={payment.order_details?.status === 'cancelled' ? 'line-through text-gray-400' : 'text-gray-500'}>
-                          {format(new Date(payment.created_at), 'MMM d, yyyy')}
+                          {format(new Date(payment.created_at), 'MMM d, yyyy | h:mm:ss a')}
                         </span>
                       </td>
                     </tr>
